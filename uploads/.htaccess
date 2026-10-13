@@ -1,19 +1,36 @@
-# Blochează execuția oricărui script în folderul uploads
-# CRITIC: Previne execuția fișierelor PHP uploadate malițios
-
-# Dezactivează PHP în acest folder
-<FilesMatch "\.php$">
-  Order allow,deny
-  Deny from all
-</FilesMatch>
-
-# Permite doar imagini, video și documente
-<FilesMatch "\.(jpg|jpeg|png|webp|gif|mp4|webm|mov|ogv|pdf|svg)$">
-  Order deny,allow
-  Allow from all
-</FilesMatch>
-
-# Dezactivează interpretarea CGI/SSI
+# ============================================
+# VEEDO — uploads: doar fișiere media, fără execuție de cod
+# ============================================
 Options -ExecCGI -Indexes
-RemoveHandler .php .php3 .php4 .php5 .php7 .php8 .phtml .phar
+RemoveHandler .php .php3 .php4 .php5 .php7 .php8 .phtml .phar .pl .py .cgi .shtml
 RemoveType application/x-httpd-php .php .php3 .php4 .php5 .php7 .php8 .phtml
+<IfModule mod_php.c>
+  php_flag engine off
+</IfModule>
+
+# Implicit: totul interzis...
+<IfModule mod_authz_core.c>
+  Require all denied
+</IfModule>
+<IfModule !mod_authz_core.c>
+  Order deny,allow
+  Deny from all
+</IfModule>
+
+# ...cu excepția imaginilor și videoclipurilor (SVG exclus — poate conține JavaScript)
+<FilesMatch "\.(jpe?g|png|webp|gif|mp4|webm|mov|ogv)$">
+  <IfModule mod_authz_core.c>
+    Require all granted
+  </IfModule>
+  <IfModule !mod_authz_core.c>
+    Order allow,deny
+    Allow from all
+  </IfModule>
+</FilesMatch>
+
+<IfModule mod_headers.c>
+  Header set X-Content-Type-Options "nosniff"
+  # Chiar dacă un fișier ar fi interpretat ca HTML, nu poate rula scripturi
+  Header set Content-Security-Policy "default-src 'none'; img-src 'self'; media-src 'self'; style-src 'unsafe-inline'; sandbox"
+  Header set Cache-Control "public, max-age=2592000"
+</IfModule>

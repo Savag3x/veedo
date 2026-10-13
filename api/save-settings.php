@@ -21,7 +21,8 @@ try {
     foreach ($_POST as $k => $v) {
         if ($k === 'csrf_token' || $k === 'active_tab') continue;
         if (in_array($k, $allowed)) {
-            setting_update($k, sanitize((string)$v));
+            if (is_array($v)) continue;
+            setting_update($k, admin_setting_value($k, (string)$v));
             $saved++;
         }
     }
@@ -31,5 +32,6 @@ try {
     json_response(['success' => true, 'saved' => $saved]);
 
 } catch (Exception $e) {
-    json_response(['success' => false, 'error' => $e->getMessage()], 500);
+    error_log('[veedo] save-settings: ' . $e->getMessage());
+    json_response(['success' => false, 'error' => 'Eroare la salvare.'], 500);
 }

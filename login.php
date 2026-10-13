@@ -5,15 +5,12 @@ if (is_logged()) redirect('/');
 
 $error = '';
 // Previne open redirect: acceptăm doar path-uri relative (nu URL-uri externe)
-$_next_raw = $_GET['next'] ?? '/';
-$next = (str_starts_with($_next_raw, '/') && !str_starts_with($_next_raw, '//')) 
-    ? sanitize($_next_raw) 
-    : '/';
+$next = safe_redirect_path((string)($_POST['next'] ?? $_GET['next'] ?? '/'), '/');
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!csrf_verify()) { $error = 'Eroare de securitate. Reîncarcă pagina.'; }
     else {
-        $email    = sanitize($_POST['email'] ?? '');
+        $email    = mb_strtolower(trim((string)($_POST['email'] ?? '')));
         $password = $_POST['password'] ?? '';
         $remember = isset($_POST['remember']);
 
@@ -24,7 +21,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $error = 'Prea multe încercări eșuate. Așteaptă ' . LOGIN_LOCKOUT_MINUTES . ' minute.';
         } else {
             $user = DB::fetch("SELECT * FROM users WHERE email=? AND is_active=1", [$email]);
-            if ($user && password_verify($password, $user['password'])) {
+            // Hash fictiv: timp de răspuns similar și când emailul nu există (anti-enumerare)
+            $hash = $user['password'] ?? '$2y$12$StnsfutGhDpS8h6c4ZKJ.e4m4D8pYEbxBjRZelpANjHS4LeHs0K7a';
+            if (password_verify($password, $hash) && $user) {
+                if (password_needs_rehash($user['password'], PASSWORD_BCRYPT, ['cost' => 12])) {
+                    DB::update('users', ['password' => password_hash($password, PASSWORD_BCRYPT, ['cost' => 12])], 'id=?', [$user['id']]);
+                }
                 login_user($user['id']);
                 if ($remember) {
                     session_set_cookie_params(['lifetime' => SESSION_LIFETIME]);
@@ -33,7 +35,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $_SESSION['theme'] = $user['theme_preference'];
                 }
                 flash('success', 'Bun venit înapoi, ' . $user['name'] . '!');
-                redirect($next ?: '/');
+                redirect($next);
             } else {
                 // Păstrăm admin_log doar pentru audit (nu mai e folosit la blocare)
                 admin_log('login_fail', 'users', 0, $_SERVER['REMOTE_ADDR'] ?? '');

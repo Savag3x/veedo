@@ -15,7 +15,7 @@ $conversations = DB::fetchAll("
            IF(c.buyer_id=?, u2.id,    u3.id)      AS other_id,
            IF(c.buyer_id=?, c.buyer_unread, c.seller_unread) AS my_unread
     FROM conversations c
-    JOIN ads a ON a.id=c.ad_id
+    LEFT JOIN ads a ON a.id=c.ad_id
     JOIN users u2 ON u2.id=c.buyer_id
     JOIN users u3 ON u3.id=c.seller_id
     WHERE (c.buyer_id=? OR c.seller_id=?)
@@ -33,21 +33,23 @@ if ($conv_id) {
                IF(c.buyer_id=?,u2.avatar,u3.avatar) AS other_avatar,
                IF(c.buyer_id=?,u2.id,   u3.id)     AS other_id
         FROM conversations c
-        JOIN ads a ON a.id=c.ad_id
+        LEFT JOIN ads a ON a.id=c.ad_id
         JOIN users u2 ON u2.id=c.buyer_id
         JOIN users u3 ON u3.id=c.seller_id
         WHERE c.id=? AND (c.buyer_id=? OR c.seller_id=?)
     ", [$uid,$uid,$uid,$conv_id,$uid,$uid]);
 
     if ($active_conv) {
-        $messages = DB::fetchAll("
+        // Ultimele 200 de mesaje (nu primele 200), afișate cronologic
+        $messages = array_reverse(DB::fetchAll("
             SELECT m.*, u.name AS sender_name, u.avatar AS sender_avatar
             FROM messages m JOIN users u ON u.id=m.sender_id
-            WHERE m.conversation_id=? ORDER BY m.id ASC LIMIT 200
-        ", [$conv_id]);
+            WHERE m.conversation_id=? ORDER BY m.id DESC LIMIT 200
+        ", [$conv_id]));
         DB::query("UPDATE messages SET is_read=1 WHERE conversation_id=? AND sender_id!=?", [$conv_id,$uid]);
         $col = $uid==$active_conv['buyer_id'] ? 'buyer_unread' : 'seller_unread';
         DB::query("UPDATE conversations SET $col=0 WHERE id=?", [$conv_id]);
+        invalidate_unread_cache($uid);
     }
 }
 
@@ -276,7 +278,7 @@ include __DIR__ . '/includes/header.php';
             <span class="conv-name"><?= h($conv['other_name']) ?></span>
             <span class="conv-time"><?= $conv['last_message_at'] ? time_ago($conv['last_message_at']) : '' ?></span>
           </div>
-          <div class="conv-ad"><?= h(mb_substr($conv['ad_title']??'',0,38)) ?></div>
+          <div class="conv-ad"><?= h(mb_substr($conv['ad_title'] ?? 'Mesaj direct',0,38)) ?></div>
           <div class="conv-prev"><?= h(mb_substr($conv['last_message']??'Începe conversația…',0,46)) ?></div>
         </div>
         <?php if($conv['my_unread']>0): ?><span class="conv-badge"><?= (int)$conv['my_unread'] ?></span><?php endif; ?>
@@ -295,8 +297,9 @@ include __DIR__ . '/includes/header.php';
       </a>
       <div style="flex:1;min-width:0;">
         <div class="chat-head-name"><?= h($active_conv['other_name']) ?></div>
-        <div class="chat-head-sub">Conversație despre un anunț</div>
+        <div class="chat-head-sub"><?= $active_conv['ad_slug'] ? 'Conversație despre un anunț' : 'Mesaj direct' ?></div>
       </div>
+      <?php if ($active_conv['ad_slug']): ?>
       <a href="/anunt/<?= h($active_conv['ad_slug']) ?>" class="chat-ad-card">
         <?php if ($active_conv['ad_photo']): ?>
           <img class="chat-ad-thumb" src="<?= h(photo_url($active_conv['ad_photo'])) ?>" alt="">
@@ -308,6 +311,7 @@ include __DIR__ . '/includes/header.php';
           <div class="chat-ad-price"><?= $active_conv['ad_price'] ? h(format_price((float)$active_conv['ad_price'],$active_conv['ad_currency'])) : 'Preț la cerere' ?></div>
         </div>
       </a>
+      <?php endif; ?>
     </div>
 
     <div class="chat-safety" id="chat-safety">
@@ -357,8 +361,9 @@ include __DIR__ . '/includes/header.php';
           <div class="msg-bubble<?= $mimg ? ' has-img' : '' ?>">
             <?php if($mimg): ?><img class="msg-img" src="<?= h($mimg) ?>" alt="imagine" loading="lazy" onclick="vLightbox(this.src)"><?php endif; ?>
             <?php if(!empty($m['body'])): ?>
-              <?php if($mimg): ?><div class="msg-cap"><?= nl2br(h($m['body'])) ?></div>
-              <?php else: ?><?= nl2br(h($m['body'])) ?><?php endif; ?>
+              <?php $mbody = html_entity_decode((string)$m['body'], ENT_QUOTES | ENT_HTML5, 'UTF-8'); ?>
+              <?php if($mimg): ?><div class="msg-cap"><?= nl2br(h($mbody)) ?></div>
+              <?php else: ?><?= nl2br(h($mbody)) ?><?php endif; ?>
             <?php endif; ?>
           </div>
           <?php if($last_of_grp): ?>

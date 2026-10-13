@@ -12,16 +12,23 @@ $sent = false;
 $error = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && csrf_verify()) {
-    $email = sanitize($_POST['email'] ?? '');
-    $user  = DB::fetch("SELECT id,name,email FROM users WHERE email=? AND is_active=1", [$email]);
+    $email = mb_strtolower(trim((string)($_POST['email'] ?? '')));
+    $user  = filter_var($email, FILTER_VALIDATE_EMAIL)
+        ? DB::fetch("SELECT id,name,email FROM users WHERE email=? AND is_active=1", [$email])
+        : null;
     if ($user) {
+        // În DB salvăm doar hash-ul tokenului: o scurgere a bazei de date nu permite preluarea conturilor
         $token   = bin2hex(random_bytes(32));
         $expires = date('Y-m-d H:i:s', strtotime('+1 hour'));
-        DB::update('users', ['reset_token'=>$token,'reset_expires'=>$expires], 'id=?', [$user['id']]);
-        // TODO: Send email with reset link
-        // Mail::send($user['email'], 'Resetare parolă', "Link: " . BASE_URL . "/reset/$token");
-        // For now, log it
-        admin_log('password_reset_request', 'users', $user['id'], $email);
+        DB::update('users', ['reset_token'=>hash('sha256', $token),'reset_expires'=>$expires], 'id=?', [$user['id']]);
+        require_once __DIR__ . '/includes/mailer.php';
+        $link = BASE_URL . '/reset/' . $token;
+        veedo_mail($user['email'], $user['name'], 'Resetare parolă',
+            '<h2>Resetare parolă</h2>
+             <p>Salut, ' . h($user['name']) . '! Am primit o cerere de resetare a parolei pentru contul tău.</p>
+             <p><a href="' . h($link) . '" class="btn">Setează o parolă nouă</a></p>
+             <p style="font-size:13px;color:#888;">Link-ul este valabil 60 de minute. Dacă nu ai cerut resetarea, ignoră acest email — parola ta rămâne neschimbată.</p>');
+        admin_log('password_reset_request', 'users', $user['id'], '');
     }
     // Always show success (don't reveal if email exists)
     $sent = true;

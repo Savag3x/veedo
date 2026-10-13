@@ -29,6 +29,9 @@ function push_send_to_subscription(array $sub, array $payload, array $vapid): bo
         'Urgency: normal',
     ];
 
+    // Anti-SSRF: nu trimitem niciodată către endpoint-uri care nu sunt servicii push reale
+    if (!function_exists('is_valid_push_endpoint') || !is_valid_push_endpoint($endpoint)) return false;
+
     $ch = curl_init($endpoint);
     curl_setopt_array($ch, [
         CURLOPT_POST           => true,
@@ -37,6 +40,8 @@ function push_send_to_subscription(array $sub, array $payload, array $vapid): bo
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_TIMEOUT        => 10,
         CURLOPT_SSL_VERIFYPEER => true,
+        CURLOPT_FOLLOWLOCATION => false,
+        CURLOPT_PROTOCOLS      => CURLPROTO_HTTPS,
     ]);
     $resp = curl_exec($ch);
     $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);

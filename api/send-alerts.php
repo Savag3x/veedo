@@ -11,7 +11,7 @@ $cli = php_sapi_name() === 'cli';
 $token = $_GET['token'] ?? '';
 $valid_token = setting('cron_secret_token', '');
 
-if (!$cli && (!$valid_token || $token !== $valid_token)) {
+if (!$cli && (strlen($valid_token) < 16 || !is_string($token) || !hash_equals($valid_token, $token))) {
     http_response_code(403);
     echo json_encode(['error' => 'Forbidden. Use CLI or provide valid token.']);
     exit;

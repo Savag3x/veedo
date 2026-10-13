@@ -4,6 +4,9 @@
 // ============================================
 
 function veedo_mail(string $to, string $name, string $subject, string $body_html): bool {
+    // Anti header-injection: fără CR/LF în destinatar, nume sau subiect; email valid obligatoriu
+    $to = no_crlf($to); $name = no_crlf($name); $subject = no_crlf($subject);
+    if (!filter_var($to, FILTER_VALIDATE_EMAIL)) return false;
     $from_email = setting('smtp_from_email') ?: setting('smtp_from') ?: setting('site_email') ?: 'noreply@veedo.ro';
     $from_name  = setting('smtp_from_name') ?: setting('site_name', 'Veedo');
     $site_url   = BASE_URL;
@@ -24,9 +27,9 @@ p{line-height:1.7;color:#444;margin-bottom:12px;}
 hr{border:none;border-top:1px solid #eee;margin:16px 0;}
 </style></head><body>
 <div class="wrap">
-  <div class="logo"><span>▶</span> '.$from_name.'</div>
+  <div class="logo"><span>▶</span> '.h($from_name).'</div>
   <div class="card">'.$body_html.'</div>
-  <div class="footer">© '.date('Y').' '.$from_name.' · <a href="'.$site_url.'">'.$site_url.'</a><br>Dacă nu ai solicitat acest email, îl poți ignora.</div>
+  <div class="footer">© '.date('Y').' '.h($from_name).' · <a href="'.$site_url.'">'.$site_url.'</a><br>Dacă nu ai solicitat acest email, îl poți ignora.</div>
 </div></body></html>';
 
     // Incearca SMTP daca e configurat
@@ -40,9 +43,9 @@ hr{border:none;border-top:1px solid #eee;margin:16px 0;}
     // Fallback: PHP mail()
     $headers  = "MIME-Version: 1.0\r\n";
     $headers .= "Content-type: text/html; charset=UTF-8\r\n";
-    $headers .= "From: {$from_name} <{$from_email}>\r\n";
+    $from_email = no_crlf($from_email);
+    $headers .= "From: =?UTF-8?B?".base64_encode(no_crlf($from_name))."?= <{$from_email}>\r\n";
     $headers .= "Reply-To: {$from_email}\r\n";
-    $headers .= "X-Mailer: PHP/".phpversion()."\r\n";
     $enc_subject = '=?UTF-8?B?'.base64_encode($subject).'?=';
     return @mail($to, $enc_subject, $html, $headers);
 }
@@ -58,7 +61,10 @@ function smtp_send(string $to, string $to_name, string $from, string $from_name,
 
     try {
         // Conectare socket
-        $ctx = stream_context_create(['ssl' => ['verify_peer'=>false,'verify_peer_name'=>false]]);
+        // Verificare certificat TLS activă (altfel parola SMTP poate fi interceptată - MITM).
+        // Doar dacă serverul SMTP are certificat self-signed se poate dezactiva din setarea smtp_insecure=1.
+        $insecure = setting('smtp_insecure', '0') === '1';
+        $ctx = stream_context_create(['ssl' => ['verify_peer'=>!$insecure,'verify_peer_name'=>!$insecure,'peer_name'=>$host]]);
         $proto = ($port === 465) ? 'ssl' : 'tcp';
         $sock = stream_socket_client("{$proto}://{$host}:{$port}", $errno, $errstr, 10, STREAM_CLIENT_CONNECT, $ctx);
         if (!$sock) return false;

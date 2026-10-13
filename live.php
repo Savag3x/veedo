@@ -298,7 +298,7 @@ if ($id) {
             <?php elseif ($stream['stream_url']): ?>
                 <?php
                 // Detectam tipul de embed
-                $url = $stream['stream_url'];
+                $url = safe_url($stream['stream_url']);
                 $embed_url = null;
 
                 // YouTube
@@ -318,11 +318,11 @@ if ($id) {
                 <iframe class="live-embed" src="<?= h($embed_url) ?>"
                         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                         allowfullscreen></iframe>
-                <?php else: ?>
+                <?php elseif ($url): ?>
                 <div class="live-placeholder">
                     <div class="live-placeholder-icon">📡</div>
                     <div>
-                        <a href="<?= h($url) ?>" target="_blank" class="btn btn-primary">▶ Deschide streamul extern</a>
+                        <a href="<?= h($url) ?>" target="_blank" rel="noopener nofollow" class="btn btn-primary">▶ Deschide streamul extern</a>
                     </div>
                 </div>
                 <?php endif; ?>

@@ -28,25 +28,25 @@ $errors    = [];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && csrf_verify()) {
     $vals = [
-        'title'            => sanitize($_POST['title'] ?? ''),
+        'title'            => mb_substr(sanitize($_POST['title'] ?? ''), 0, 150),
         'category_id'      => (int)($_POST['category_id'] ?? 0),
-        'description'      => sanitize_html($_POST['description'] ?? ''),
-        'price'            => strlen($_POST['price'] ?? '') ? (float)$_POST['price'] : null,
+        'description'      => mb_substr(sanitize_html($_POST['description'] ?? ''), 0, 9000),
+        'price'            => strlen($_POST['price'] ?? '') ? max(0, min(9999999999, (float)$_POST['price'])) : null,
         'price_negotiable' => (int)isset($_POST['price_negotiable']),
         'currency'         => in_array($_POST['currency']??'',['RON','EUR','USD']) ? $_POST['currency'] : 'RON',
-        'city'             => sanitize($_POST['city'] ?? ''),
-        'county'           => sanitize($_POST['county'] ?? ''),
-        'contact_phone'    => sanitize($_POST['contact_phone'] ?? ''),
+        'city'             => mb_substr(sanitize($_POST['city'] ?? ''), 0, 100),
+        'county'           => mb_substr(sanitize($_POST['county'] ?? ''), 0, 100),
+        'contact_phone'    => clean_phone($_POST['contact_phone'] ?? ''),
     ];
 
     if (strlen($vals['title']) < 5)       $errors[] = 'Titlul trebuie să aibă cel puțin 5 caractere.';
-    if (!$vals['category_id'])             $errors[] = 'Selectează o categorie.';
+    if (!$vals['category_id'] || !DB::fetch("SELECT id FROM categories WHERE id=? AND is_active=1", [$vals['category_id']])) $errors[] = 'Selectează o categorie.';
     if (strlen($vals['description']) < 20) $errors[] = 'Descrierea trebuie să aibă cel puțin 20 de caractere.';
     if (!$vals['city'])                    $errors[] = 'Introdu orașul.';
 
     if (empty($errors)) {
-        // Update phone
-        if ($vals['contact_phone'] && $vals['contact_phone'] !== $user_full['phone']) {
+        // Update phone (doar pentru propriul cont — nu suprascriem telefonul proprietarului la editarea din admin)
+        if (!$is_admin_edit && $vals['contact_phone'] && $vals['contact_phone'] !== $user_full['phone']) {
             DB::update('users', ['phone' => $vals['contact_phone']], 'id=?', [$u['id']]);
         }
 
@@ -60,8 +60,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && csrf_verify()) {
             'city'             => $vals['city'],
             'county'           => $vals['county'],
             'updated_at'       => date('Y-m-d H:i:s'),
-            'bumped_at'        => date('Y-m-d H:i:s'),
+            // bumped_at NU se mai actualizează la editare (altfel editarea ocolea limita de reactualizare la 24h)
         ];
+        // Moderare: dacă aprobarea automată e oprită, un anunț activ al cărui text se schimbă
+        // revine în așteptare (altfel se putea publica conținut neaprobat prin editare).
+        if (!is_moderator() && !setting_bool('ad_auto_approve') && $ad['status'] === 'active'
+            && ($vals['title'] !== $ad['title'] || $vals['description'] !== $ad['description'])) {
+            $update_data['status'] = 'pending';
+            $went_pending = true;
+        }
         // Admin poate schimba status si boost
         if (is_admin() || is_moderator()) {
             $allowed_statuses = ['active','pending','rejected','expired','sold'];
@@ -83,7 +90,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && csrf_verify()) {
         try {
             $all_fields = DB::fetchAll("SELECT * FROM category_fields WHERE category_id=? AND is_active=1", [$vals['category_id']]);
             foreach ($all_fields as $cf) {
-                $fval = sanitize($_POST['cf_'.$cf['field_name']] ?? '');
+                $fval = mb_substr(sanitize((string)($_POST['cf_'.$cf['field_name']] ?? '')), 0, 255);
                 if ($fval) {
                     DB::query("INSERT INTO ad_fields (ad_id, field_id, field_value) VALUES (?,?,?) ON DUPLICATE KEY UPDATE field_value=?",
                         [$ad['id'], $cf['id'], $fval, $fval]);
@@ -119,7 +126,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && csrf_verify()) {
                         // Logging — fisier vizibil + error_log
                         $_vlog = function($msg) {
                             $line = '[' . date('Y-m-d H:i:s') . "] $msg\n";
-                            @file_put_contents(__DIR__ . '/video-compress.log', $line, FILE_APPEND | LOCK_EX);
                             error_log("[veedo video-edit] $msg");
                         };
                         $_vlog("(EDIT) orig=" . number_format($original_size/1048576, 2) . "MB"
@@ -204,11 +210,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && csrf_verify()) {
         }
 
         if (empty($errors)) {
-            flash('success','Anunțul a fost actualizat!');
+            flash('success', !empty($went_pending)
+                ? 'Anunțul a fost actualizat și retrimis spre aprobare.'
+                : 'Anunțul a fost actualizat!');
             if ($is_admin_edit ?? false) {
                 redirect('/admin?s=ads&flash=updated');
             } else {
-                redirect('/anunt/'.$ad['slug']);
+                redirect(!empty($went_pending) ? '/cont/anunturile-mele' : '/anunt/'.$ad['slug']);
             }
         }
     }
@@ -474,14 +482,14 @@ include __DIR__ . '/includes/header.php';
 
 <script>
 // ── Category fields ───────────────────────────────────────
-const existingVals = <?= json_encode($existing_vals) ?>;
+const existingVals = <?= js_json($existing_vals) ?>;
 <?php
 try {
     $ef = DB::fetchAll("SELECT * FROM category_fields WHERE is_active=1 ORDER BY category_id, sort_order");
     $eg = array_reduce($ef, function($c,$f){ $f['options']=$f['field_options']?json_decode($f['field_options'],true):[]; $c[$f['category_id']][]=$f; return $c; }, []);
 } catch(Exception $e){ $eg=[]; }
 ?>
-const allCatFields = <?= json_encode($eg) ?>;
+const allCatFields = <?= js_json($eg) ?>;
 
 function loadCategoryFields(catId) {
     const wrap = document.getElementById('category-fields-wrap');

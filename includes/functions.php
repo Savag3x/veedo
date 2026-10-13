@@ -8,10 +8,44 @@ $_settings_cache = null;
 function setting(string $key, string $default = ''): string {
     global $_settings_cache;
     if ($_settings_cache === null) {
-        $rows = DB::fetchAll("SELECT setting_key, setting_value FROM settings");
-        $_settings_cache = array_column($rows, 'setting_value', 'setting_key');
+        // Cache in memorie partajata (APCu) 60s — evita un SELECT pe settings la fiecare request
+        $apcu = function_exists('apcu_fetch') && ini_get('apc.enabled');
+        $cached = $apcu ? apcu_fetch(cache_key('settings'), $ok) : null;
+        if ($apcu && $ok && is_array($cached)) {
+            $_settings_cache = $cached;
+        } else {
+            $rows = DB::fetchAll("SELECT setting_key, setting_value FROM settings");
+            $_settings_cache = array_column($rows, 'setting_value', 'setting_key');
+            if ($apcu) apcu_store(cache_key('settings'), $_settings_cache, 60);
+        }
     }
-    return $_settings_cache[$key] ?? $default;
+    return (string)($_settings_cache[$key] ?? $default);
+}
+
+/** Cheie de cache unica per instalare (mai multe site-uri pot partaja acelasi APCu). */
+function cache_key(string $k): string {
+    return 'veedo:' . md5(BASE_PATH) . ':' . $k;
+}
+
+/**
+ * Cache simplu (APCu daca exista, altfel doar per-request) pentru interogari repetate pe fiecare pagina
+ * (ex. categorii in footer/header). $fn este apelat doar la cache miss.
+ */
+function cache_remember(string $key, int $ttl, callable $fn): mixed {
+    static $local = [];
+    if (array_key_exists($key, $local)) return $local[$key];
+    $apcu = function_exists('apcu_fetch') && ini_get('apc.enabled');
+    if ($apcu) {
+        $v = apcu_fetch(cache_key($key), $ok);
+        if ($ok) return $local[$key] = $v;
+    }
+    $v = $fn();
+    if ($apcu) apcu_store(cache_key($key), $v, $ttl);
+    return $local[$key] = $v;
+}
+
+function cache_forget(string $key): void {
+    if (function_exists('apcu_delete')) @apcu_delete(cache_key($key));
 }
 
 function setting_bool(string $key): bool {
@@ -22,13 +56,23 @@ function setting_update(string $key, string $value): void {
     global $_settings_cache;
     DB::query("INSERT INTO settings (setting_key, setting_value) VALUES (?,?) ON DUPLICATE KEY UPDATE setting_value=?", [$key, $value, $value]);
     if ($_settings_cache !== null) $_settings_cache[$key] = $value;
+    cache_forget('settings');
 }
 
 // ---- Auth ----
 function session_start_safe(): void {
     if (session_status() === PHP_SESSION_NONE) {
+        if (PHP_SAPI === 'cli') return;
+        ini_set('session.use_strict_mode', '1');
+        ini_set('session.use_only_cookies', '1');
+        ini_set('session.cookie_httponly', '1');
+        ini_set('session.gc_maxlifetime', (string)SESSION_LIFETIME);
         session_name(SESSION_NAME);
-        session_set_cookie_params(['lifetime' => SESSION_LIFETIME, 'path' => '/', 'secure' => true, 'httponly' => true, 'samesite' => 'Lax']);
+        session_set_cookie_params([
+            'lifetime' => SESSION_LIFETIME, 'path' => '/',
+            'secure'   => APP_ENV !== 'development' || is_https_request(),
+            'httponly' => true, 'samesite' => 'Lax',
+        ]);
         session_start();
     }
 }
@@ -37,18 +81,20 @@ function current_user(): ?array {
     if (!isset($_SESSION['user_id'])) return null;
     static $u = null;
     if ($u === null) {
-        $u = DB::fetch("SELECT id,name,email,role,avatar,is_verified_business,theme_preference FROM users WHERE id=? AND is_active=1", [$_SESSION['user_id']]);
+        $u = DB::fetch("SELECT id,name,email,phone,city,role,avatar,is_verified_business,theme_preference,ads_count FROM users WHERE id=? AND is_active=1", [$_SESSION['user_id']]);
+        // Cont dezactivat/sters intre timp: inchidem sesiunea
+        if (!$u) { unset($_SESSION['user_id']); return null; }
     }
     return $u;
 }
 
-function is_logged(): bool { return isset($_SESSION['user_id']); }
+function is_logged(): bool { return isset($_SESSION['user_id']) && current_user() !== null; }
 function is_admin(): bool  { return (current_user()['role'] ?? '') === 'admin'; }
 function is_moderator(): bool { return in_array(current_user()['role'] ?? '', ['admin','moderator']); }
 
 function require_login(): void {
     if (!is_logged()) {
-        redirect('/login?next=' . urlencode($_SERVER['REQUEST_URI']));
+        redirect('/login?next=' . urlencode(safe_redirect_path($_SERVER['REQUEST_URI'] ?? '/')));
     }
 }
 
@@ -62,12 +108,16 @@ function require_admin(): void {
 function login_user(int $id): void {
     session_regenerate_id(true);
     $_SESSION['user_id'] = $id;
+    // Token CSRF nou dupa autentificare (previne fixarea tokenului)
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(CSRF_TOKEN_LENGTH));
     DB::query("UPDATE users SET last_login=NOW() WHERE id=?", [$id]);
 }
 
 function logout_user(): void {
+    $_SESSION = [];
+    $p = session_get_cookie_params();
+    setcookie(SESSION_NAME, '', ['expires' => time() - 3600, 'path' => '/', 'secure' => $p['secure'], 'httponly' => true, 'samesite' => 'Lax']);
     session_destroy();
-    setcookie(SESSION_NAME, '', time()-3600, '/');
     redirect('/');
 }
 
@@ -84,7 +134,8 @@ function csrf_field(): string {
 }
 
 function csrf_verify(): bool {
-    return isset($_POST['csrf_token']) && hash_equals($_SESSION['csrf_token'] ?? '', $_POST['csrf_token']);
+    // Accepta tokenul din formular, din header-ul X-CSRF-Token sau din body-ul JSON
+    return csrf_request_valid();
 }
 
 function csrf_get_param(): string {
@@ -96,8 +147,8 @@ function csrf_check_get(): bool {
 }
 
 // ---- XSS / Output ----
-function h(string $s): string {
-    return htmlspecialchars($s, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+function h(?string $s): string {
+    return htmlspecialchars((string)$s, ENT_QUOTES | ENT_HTML5 | ENT_SUBSTITUTE, 'UTF-8');
 }
 
 function slug(string $s): string {
@@ -108,11 +159,15 @@ function slug(string $s): string {
 }
 
 function unique_slug(string $title, string $table = 'ads', string $col = 'slug'): string {
-    $base = slug($title);
+    if (!in_array($table, ['ads', 'pages', 'categories'], true) || $col !== 'slug') {
+        throw new InvalidArgumentException('unique_slug: tabel invalid');
+    }
+    $base = mb_substr(slug($title), 0, 120) ?: 'anunt';
     $slug = $base;
     $i = 1;
     while (DB::fetch("SELECT id FROM $table WHERE $col=?", [$slug])) {
         $slug = $base . '-' . $i++;
+        if ($i > 50) { $slug = $base . '-' . bin2hex(random_bytes(3)); break; }
     }
     return $slug;
 }
@@ -166,7 +221,8 @@ function paginate_count(int $total, int $per_page, int $current_page, string $ba
 function render_pagination(array $p): string {
     if ($p['total_pages'] <= 1) return '';
     $html = '<div style="display:flex;justify-content:center;align-items:center;gap:6px;padding:24px 0;flex-wrap:wrap;">';
-    $sep = strpos($p['base_url'], '?') !== false ? '&' : '?';
+    $p['base_url'] = h($p['base_url']);
+    $sep = strpos($p['base_url'], '?') !== false ? '&amp;' : '?';
 
     if ($p['has_prev']) {
         $html .= '<a href="'.$p['base_url'].$sep.'pagina='.$p['prev'].'" class="btn btn-secondary btn-sm">← Anterior</a>';
@@ -222,9 +278,14 @@ HTML;
 function seo_breadcrumb(array $items): string {
     $list = [];
     foreach ($items as $i => $item) {
-        $list[] = '{"@type":"ListItem","position":'.($i+1).',"name":"'.addslashes($item['name']).'","item":"'.addslashes($item['url'] ?? '').'" }';
+        $list[] = ['@type' => 'ListItem', 'position' => $i + 1, 'name' => (string)$item['name'], 'item' => (string)($item['url'] ?? '')];
     }
-    return '<script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":['.implode(',', $list).']}</script>';
+    return '<script type="application/ld+json">' . json_ld(['@context' => 'https://schema.org', '@type' => 'BreadcrumbList', 'itemListElement' => $list]) . '</script>';
+}
+
+/** JSON sigur pentru <script type="application/ld+json"> (escape pentru </script>). */
+function json_ld(array $data): string {
+    return json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP);
 }
 
 // ---- Format helpers ----
@@ -346,7 +407,7 @@ function invalidate_unread_cache(int $userId): void {
 // ---- Error pages ----
 function render_error(int $code, string $msg): string {
     http_response_code($code);
-    return "<html><body style='font-family:sans-serif;text-align:center;padding:80px'><h1>$code</h1><p>$msg</p><a href='/'>← Acasă</a></body></html>";
+    return "<!DOCTYPE html><html lang='ro'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>" . (int)$code . "</title></head><body style='font-family:system-ui,sans-serif;text-align:center;padding:80px'><h1>" . (int)$code . "</h1><p>" . h($msg) . "</p><a href='/'>← Acasă</a></body></html>";
 }
 
 // ---- Admin log ----
@@ -374,6 +435,24 @@ function get_flash(string $key): string {
     $m = $_SESSION['flash'][$key] ?? '';
     unset($_SESSION['flash'][$key]);
     return $m;
+}
+
+/**
+ * Afișează (și consumă) toate mesajele flash ca toast-uri.
+ * Înainte, mesajele setate cu flash() nu erau afișate nicăieri pe paginile publice.
+ */
+function flash_render(): void {
+    if (empty($_SESSION['flash']) || !is_array($_SESSION['flash'])) return;
+    $icons = ['success' => '✓', 'error' => '!', 'info' => 'i', 'warning' => '!'];
+    echo '<div class="toast-stack" role="status" aria-live="polite">';
+    foreach ($_SESSION['flash'] as $type => $msg) {
+        if ($msg === '' || $msg === null) continue;
+        $t = isset($icons[$type]) ? $type : 'info';
+        echo '<div class="toast toast-' . $t . '" data-auto-dismiss><span class="toast-ico">' . $icons[$t] . '</span><span class="toast-msg">'
+            . h((string)$msg) . '</span><button type="button" class="toast-x" aria-label="Închide" onclick="this.parentNode.remove()">×</button></div>';
+    }
+    echo '</div>';
+    unset($_SESSION['flash']);
 }
 
 // ---- Sanitize ----
@@ -536,9 +615,18 @@ function rate_limit_or_die(string $action, int $max = 10, int $window = 60): voi
     }
 }
 
-function sanitize(string $s): string { return trim(strip_tags($s)); }
-function sanitize_html(string $s): string {
-    return strip_tags(trim($s), '<p><br><b><strong><i><em><ul><ol><li><h2><h3>');
+function sanitize(mixed $s): string {
+    // Array-uri trimise intentionat (ex. name[]=x) nu mai produc erori fatale
+    if (!is_scalar($s)) return '';
+    // Elimina tag-uri HTML si caractere de control invizibile (pastreaza \n si \t)
+    $t = strip_tags((string)$s);
+    return trim(preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/u', '', $t) ?? $t);
+}
+function sanitize_html(mixed $s): string {
+    if (!is_scalar($s)) return '';
+    $s = strip_tags(trim((string)$s), '<p><br><b><strong><i><em><ul><ol><li><h2><h3>');
+    // Elimina TOATE atributele din tag-urile permise (onclick, style, href=javascript: etc.)
+    return preg_replace('/<(\/?)(p|br|b|strong|i|em|ul|ol|li|h2|h3)\b[^>]*>/i', '<$1$2>', $s);
 }
 
 // ---- Upload helpers ----
@@ -568,6 +656,7 @@ function upload_photo(array $file, string $destDir): ?string {
 
     // 2. Verifică MIME-ul REAL (nu cel declarat de browser - poate fi fals!)
     $real_mime = real_mime($file['tmp_name']);
+    if (($file['size'] ?? 0) > 15 * 1024 * 1024) return null;
     $allowed_mimes = ['image/jpeg','image/png','image/webp','image/gif'];
     if (!in_array($real_mime, $allowed_mimes)) return null;
 
@@ -583,7 +672,8 @@ function upload_photo(array $file, string $destDir): ?string {
     $name = bin2hex(random_bytes(16)) . '.' . $ext;
 
     // 6. Mută fișierul
-    if (move_uploaded_file($file['tmp_name'], $destDir . $name)) return $name;
+    if (!is_dir($destDir)) @mkdir($destDir, 0755, true);
+    if (move_uploaded_file($file['tmp_name'], $destDir . $name)) { @chmod($destDir . $name, 0644); return $name; }
     return null;
 }
 
@@ -635,4 +725,27 @@ function generate_affiliate_code(string $name): string {
     $base = strtoupper(substr(preg_replace('/[^a-zA-Z0-9]/', '', $name), 0, 6));
     $suffix = strtoupper(bin2hex(random_bytes(3)));
     return $base . $suffix;
+}
+/**
+ * Validare valori setări din admin, în funcție de tipul cheii.
+ * - chei secrete (parole/chei API/PEM): păstrate exact (doar trim) — strip_tags le-ar putea corupe
+ * - culori: doar hex valid
+ * - URL-uri: doar http(s) sau cale relativă
+ * - Google Analytics: doar ID valid (altfel ar fi injectat în <script>)
+ */
+function admin_setting_value(string $key, string $value): string {
+    $value = trim($value);
+    if (preg_match('/(_pass|_secret|_key|_signature|_token)$/', $key)) return $value;
+    if (str_starts_with($key, 'site_color_') || str_ends_with($key, '_color')) return safe_color($value, '#E8380D');
+    if (str_starts_with($key, 'social_') || in_array($key, ['site_logo', 'site_favicon', 'og_image', 'og_default_image'], true)) {
+        return safe_url($value, true);
+    }
+    if ($key === 'google_analytics') return preg_match('/^[A-Z0-9-]{4,30}$/i', $value) ? $value : '';
+    if ($key === 'custom_css') return str_ireplace(['</style', '<script', 'expression('], '', strip_tags($value));
+    return sanitize($value);
+}
+
+/** json_encode sigur pentru inserare în <script> (escape pentru <, >, &, ', "). */
+function js_json(mixed $v, int $flags = 0): string {
+    return json_encode($v, $flags | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE) ?: 'null';
 }

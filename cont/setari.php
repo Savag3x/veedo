@@ -10,11 +10,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && csrf_verify()) {
 
     // ── Profil general ────────────────────────────────────────
     if (isset($_POST['save_profile'])) {
-        $name   = sanitize($_POST['name'] ?? '');
-        $phone  = sanitize($_POST['phone'] ?? '');
-        $city   = sanitize($_POST['city'] ?? '');
-        $county = sanitize($_POST['county'] ?? '');
-        $bio    = sanitize($_POST['bio'] ?? '');
+        $name   = mb_substr(sanitize($_POST['name'] ?? ''), 0, 80);
+        $phone  = clean_phone($_POST['phone'] ?? '');
+        $city   = mb_substr(sanitize($_POST['city'] ?? ''), 0, 100);
+        $county = mb_substr(sanitize($_POST['county'] ?? ''), 0, 100);
+        $bio    = mb_substr(sanitize($_POST['bio'] ?? ''), 0, 1000);
         $theme  = in_array($_POST['theme']??'', ['light','dark','auto']) ? $_POST['theme'] : 'auto';
         $notif_email = !empty($_POST['notification_email']) ? 1 : 0;
 
@@ -54,11 +54,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && csrf_verify()) {
         $new  = $_POST['new_password'] ?? '';
         $con  = $_POST['confirm_password'] ?? '';
         $full = DB::fetch("SELECT password FROM users WHERE id=?", [$u['id']]);
+        rate_limit_or_die('change_pw', 10, 900);
         if (!password_verify($old, $full['password'])) $errors[] = 'Parola actuală este incorectă.';
+        if (strlen($new) > 200)                         $errors[] = 'Parola nouă este prea lungă.';
         if (strlen($new) < PASSWORD_MIN_LENGTH)         $errors[] = 'Parola nouă min '.PASSWORD_MIN_LENGTH.' caractere.';
         if ($new !== $con)                              $errors[] = 'Parolele nu coincid.';
         if (empty($errors)) {
-            DB::update('users', ['password' => password_hash($new, PASSWORD_BCRYPT, ['cost'=>12])], 'id=?', [$u['id']]);
+            DB::update('users', ['password' => password_hash($new, PASSWORD_BCRYPT, ['cost'=>12]), 'reset_token' => null], 'id=?', [$u['id']]);
+            session_regenerate_id(true);
             flash('success', 'Parola a fost schimbată!');
             redirect('/cont/setari?tab=securitate');
         }
@@ -71,10 +74,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && csrf_verify()) {
             redirect('/cont/setari');
         }
         $bdata = [
-            'business_name'     => sanitize($_POST['business_name'] ?? ''),
-            'business_desc'     => sanitize($_POST['business_desc'] ?? ''),
-            'business_website'  => sanitize($_POST['business_website'] ?? ''),
-            'business_phone'    => sanitize($_POST['business_phone'] ?? ''),
+            'business_name'     => mb_substr(sanitize($_POST['business_name'] ?? ''), 0, 150),
+            'business_desc'     => mb_substr(sanitize($_POST['business_desc'] ?? ''), 0, 2000),
+            // doar http(s) — altfel un link javascript: ar rula cod pe profilul public
+            'business_website'  => safe_url($_POST['business_website'] ?? ''),
+            'business_phone'    => clean_phone($_POST['business_phone'] ?? ''),
             'business_category' => sanitize($_POST['business_category'] ?? ''),
             'business_schedule' => sanitize($_POST['business_schedule'] ?? ''),
             'business_address'  => sanitize($_POST['business_address'] ?? ''),
@@ -90,7 +94,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && csrf_verify()) {
                 $errors[] = 'Format banner invalid (JPEG/PNG/WebP, max 5MB).';
             }
         } elseif (!empty($_POST['business_banner_url'])) {
-            $bdata['business_banner'] = sanitize($_POST['business_banner_url']);
+            $bdata['business_banner'] = safe_url($_POST['business_banner_url']);
         }
         if (empty($errors)) {
             DB::update('users', $bdata, 'id=?', [$u['id']]);

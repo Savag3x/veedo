@@ -7,13 +7,15 @@ if (!is_logged()) json_response(['error' => 'Neautorizat'], 401);
 $u   = current_user();
 $uid = $u['id'];
 
-$data = json_decode(file_get_contents('php://input'), true);
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') json_response(['error' => 'Method not allowed'], 405);
+rate_limit_or_die('push_sub', 20, 3600);
+$data = request_json();
 if (!$data) json_response(['error' => 'Date invalide'], 400);
 
 $action   = $data['action'] ?? 'subscribe';
-$endpoint = $data['endpoint'] ?? '';
-$p256dh   = $data['keys']['p256dh'] ?? '';
-$auth     = $data['keys']['auth']   ?? '';
+$endpoint = is_string($data['endpoint'] ?? null) ? $data['endpoint'] : '';
+$p256dh   = (string)($data['keys']['p256dh'] ?? '');
+$auth     = (string)($data['keys']['auth'] ?? '');
 
 // Unsubscribe
 if ($action === 'unsubscribe') {
@@ -25,6 +27,17 @@ if ($action === 'unsubscribe') {
 if (!$endpoint || !$p256dh || !$auth) {
     json_response(['error' => 'Date incomplete'], 400);
 }
+// Anti-SSRF: serverul va trimite POST la acest endpoint, deci acceptăm doar servicii push reale
+if (!is_valid_push_endpoint($endpoint)
+    || !preg_match('/^[A-Za-z0-9_-]{20,200}$/', $p256dh)
+    || !preg_match('/^[A-Za-z0-9_-]{8,64}$/', $auth)) {
+    json_response(['error' => 'Subscription invalidă'], 400);
+}
+// Limităm numărul de dispozitive per utilizator
+$cnt = (int)(DB::fetch("SELECT COUNT(*) c FROM push_subscriptions WHERE user_id=?", [$uid])['c'] ?? 0);
+if ($cnt >= 10) {
+    DB::query("DELETE FROM push_subscriptions WHERE user_id=? ORDER BY last_used ASC LIMIT 1", [$uid]);
+}
 
 // Detectam browser-ul
 $ua      = $_SERVER['HTTP_USER_AGENT'] ?? '';
@@ -35,20 +48,6 @@ elseif (str_contains($ua, 'Safari'))   $browser = 'Safari';
 elseif (str_contains($ua, 'Edge'))     $browser = 'Edge';
 
 try {
-    // Auto-create tabela daca nu exista
-    DB::query("CREATE TABLE IF NOT EXISTS `push_subscriptions` (
-        `id` int NOT NULL AUTO_INCREMENT PRIMARY KEY,
-        `user_id` int NOT NULL,
-        `endpoint` varchar(1000) NOT NULL,
-        `p256dh` varchar(500) NOT NULL,
-        `auth` varchar(200) NOT NULL,
-        `browser` varchar(50) DEFAULT NULL,
-        `created_at` timestamp DEFAULT CURRENT_TIMESTAMP,
-        `last_used` timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        UNIQUE KEY `unique_ep` (user_id, endpoint(255)),
-        INDEX `idx_user` (user_id)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci");
-
     // Insert sau update subscription
     DB::query("INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth, browser)
                VALUES (?, ?, ?, ?, ?)
@@ -57,5 +56,6 @@ try {
 
     json_response(['ok' => true, 'action' => 'subscribed', 'browser' => $browser]);
 } catch (Exception $e) {
-    json_response(['error' => 'DB error: ' . $e->getMessage()], 500);
+    error_log('[veedo] push-subscribe: ' . $e->getMessage());
+    json_response(['error' => 'Eroare la salvare'], 500);
 }

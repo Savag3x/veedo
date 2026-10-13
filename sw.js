@@ -123,13 +123,13 @@ self.addEventListener('notificationclick', function(event) {
 self.addEventListener('pushsubscriptionchange', function(event) {
     event.waitUntil(
         self.registration.pushManager.subscribe(event.oldSubscription.options)
-            .then(sub => {
-                return fetch('/api/push-subscribe.php', {
+            .then(sub => fetch('/api/csrf-token.php', { credentials: 'same-origin' })
+                .then(r => r.json())
+                .then(t => fetch('/api/push-subscribe.php', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': t.token || '' },
                     body: JSON.stringify(sub.toJSON()),
                     credentials: 'same-origin'
-                });
-            })
+                })))
     );
 });

@@ -10,7 +10,10 @@ $rating      = max(1,min(5,(int)($_POST['rating'] ?? 0)));
 $comment     = sanitize($_POST['comment'] ?? '');
 $ad_id       = (int)($_POST['ad_id'] ?? 0);
 
-if (!$reviewed_id || !$rating) { flash('error','Date incomplete.'); redirect('back'); }
+rate_limit_or_die('review', 10, 3600);
+if (!$reviewed_id || !$rating) { flash('error','Date incomplete.'); redirect(safe_back_url('/')); }
+if (!DB::fetch("SELECT id FROM users WHERE id=? AND is_active=1", [$reviewed_id])) { flash('error','Utilizator negăsit.'); redirect('/'); }
+$comment = mb_substr($comment, 0, 1000);
 if ($reviewed_id == $u['id']) { flash('error','Nu poți da recenzie propriului profil.'); redirect('/utilizator/'.$reviewed_id); }
 
 // Check if already reviewed this user

@@ -6,7 +6,8 @@ require_login();
 $u = current_user();
 
 // Doar business/admin pot face LIVE
-if (!$u['is_verified_business'] && $u['role'] !== 'business' && $u['role'] !== 'admin') {
+// LIVE doar pentru conturi Business VERIFICATE (rolul "business" se poate alege liber la înregistrare)
+if (!$u['is_verified_business'] && $u['role'] !== 'admin') {
     flash('error','Doar conturile Business Verificat pot porni un stream LIVE.');
     redirect('/cont/abonamente');
 }
@@ -23,7 +24,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && csrf_verify()) {
     if ($action === 'create') {
         $title       = sanitize($_POST['title'] ?? '');
         $desc        = sanitize($_POST['description'] ?? '');
-        $stream_url  = sanitize($_POST['stream_url'] ?? '');
+        $stream_url  = safe_url($_POST['stream_url'] ?? '');
         $scheduled   = sanitize($_POST['scheduled_at'] ?? '');
 
         if (strlen($title) < 5) $errors[] = 'Titlul trebuie să aibă cel puțin 5 caractere.';

@@ -8,8 +8,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     rate_limit_or_die('reset', 10, 900);
 }
 
-$token = sanitize($_GET['token'] ?? '');
-$user  = DB::fetch("SELECT id,name,email FROM users WHERE reset_token=? AND reset_expires > NOW() AND is_active=1", [$token]);
+$token = (string)($_GET['token'] ?? '');
+$user  = preg_match('/^[a-f0-9]{64}$/', $token)
+    ? DB::fetch("SELECT id,name,email FROM users WHERE reset_token=? AND reset_expires > NOW() AND is_active=1", [hash('sha256', $token)])
+    : null;
 
 $error   = '';
 $success = false;
@@ -23,6 +25,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $user && csrf_verify()) {
     $confirm = $_POST['password_confirm'] ?? '';
     if (strlen($pass) < PASSWORD_MIN_LENGTH) {
         $error = 'Parola trebuie să aibă cel puțin ' . PASSWORD_MIN_LENGTH . ' caractere.';
+    } elseif (strlen($pass) > 200) {
+        $error = 'Parola este prea lungă.';
     } elseif ($pass !== $confirm) {
         $error = 'Parolele nu coincid.';
     } else {

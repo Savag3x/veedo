@@ -6,20 +6,14 @@ require_login();
 header('Content-Type: application/json');
 
 $u    = current_user();
-$data = json_decode(file_get_contents('php://input'), true);
-
-// CSRF: verifică token din body JSON sau header HTTP (același pattern ca api/like.php)
-$_csrf = $data['csrf_token'] ?? ($_SERVER['HTTP_X_CSRF_TOKEN'] ?? '');
-if (!hash_equals($_SESSION['csrf_token'] ?? '', $_csrf)) {
-    json_response(['error' => 'CSRF invalid'], 403);
-}
+$data = request_json(); // CSRF verificat global în bootstrap
 
 // Rate limiting: max 10 inițieri plată/oră per user (anti-spam)
 rate_limit_or_die('boost_payment_' . $u['id'], 10, 3600);
 
 $ad_id  = (int)($data['ad_id'] ?? 0);
 $plan   = in_array($data['plan'] ?? '', ['7','30','business']) ? $data['plan'] : '7';
-$method = $data['method'] ?? 'stripe'; // stripe sau netopia
+$method = in_array($data['method'] ?? '', ['stripe', 'netopia'], true) ? $data['method'] : 'stripe';
 
 // Validare anunt (pentru boost) sau utilizator (pentru business)
 if ($plan === 'business') {
@@ -46,6 +40,8 @@ if ($method === 'stripe') {
 
     $ch = curl_init('https://api.stripe.com/v1/payment_intents');
     curl_setopt_array($ch, [
+        CURLOPT_TIMEOUT        => 20,
+        CURLOPT_SSL_VERIFYPEER => true,
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_POST           => true,
         CURLOPT_USERPWD        => "$sk:",
@@ -58,11 +54,12 @@ if ($method === 'stripe') {
             'metadata[type]'    => $type,
         ]),
     ]);
-    $res = json_decode(curl_exec($ch), true);
+    $res = json_decode((string)curl_exec($ch), true);
     curl_close($ch);
 
-    if (!empty($res['error'])) {
-        echo json_encode(['error' => $res['error']['message'] ?? 'Eroare Stripe.']);
+    if (!is_array($res) || !empty($res['error']) || empty($res['id'])) {
+        error_log('[veedo] stripe create PI: ' . ($res['error']['message'] ?? 'răspuns invalid'));
+        echo json_encode(['error' => 'Plata nu a putut fi inițiată. Încearcă din nou.']);
         exit;
     }
 
@@ -91,7 +88,7 @@ if ($method === 'netopia') {
         exit;
     }
 
-    $order_id = 'VD-' . $u['id'] . '-' . time();
+    $order_id = 'VD-' . $u['id'] . '-' . time() . '-' . bin2hex(random_bytes(3));
     
     // Salvam tranzactia pending
     $txn_id = DB::insert('orders', [

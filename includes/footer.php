@@ -95,7 +95,7 @@ $yr = date('Y');
 <script>
 // ── Web Push ──────────────────────────────────────────────
 (function() {
-    const VAPID_PUBLIC_KEY = '<?= VAPID_PUBLIC_KEY ?>';
+    const VAPID_PUBLIC_KEY = <?= js_json(VAPID_PUBLIC_KEY) ?>;
 
     if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
 

@@ -198,7 +198,8 @@ include __DIR__ . '/includes/header.php';
 <!-- Cover -->
 <div class="prf-cover">
     <?php if ($is_business && $profile['business_banner']): ?>
-    <img src="<?= h($profile['business_banner']) ?>" alt="">
+    <?php $_bn = $profile['business_banner']; $_bn = preg_match('~^https?://~i', $_bn) ? safe_url($_bn) : BASE_URL . '/uploads/avatars/' . rawurlencode(basename($_bn)); ?>
+    <img src="<?= h($_bn) ?>" alt="" loading="lazy">
     <?php endif; ?>
 </div>
 
@@ -231,7 +232,7 @@ include __DIR__ . '/includes/header.php';
                 <a href="tel:<?= h(preg_replace('/\s+/','',$profile['business_phone'])) ?>" class="btn btn-secondary">📞 Sună</a>
                 <?php endif; ?>
                 <?php if ($is_business && $profile['business_website']): ?>
-                <a href="<?= h($profile['business_website']) ?>" target="_blank" rel="noopener" class="btn btn-secondary">🌐 Site</a>
+                <?php if (safe_url($profile['business_website'])): ?><a href="<?= h(safe_url($profile['business_website'])) ?>" target="_blank" rel="noopener nofollow ugc" class="btn btn-secondary">🌐 Site</a><?php endif; ?>
                 <?php endif; ?>
             <?php elseif ($cu && $cu['id'] === $profile_id): ?>
                 <a href="/cont/setari" class="btn btn-secondary">⚙️ Editează</a>
@@ -393,8 +394,8 @@ include __DIR__ . '/includes/header.php';
             ['Nume firmă',$profile['business_name'],null],
             ['Domeniu',$profile['business_category'],null],
             ['Adresă',$profile['business_address'],null],
-            ['Telefon',$profile['business_phone'],'tel:'.preg_replace('/\s+/','',$profile['business_phone']??'')],
-            ['Website',$profile['business_website'],$profile['business_website']],
+            ['Telefon',$profile['business_phone'],'tel:'.preg_replace('/[^0-9+]/','',$profile['business_phone']??'')],
+            ['Website',safe_url($profile['business_website']),safe_url($profile['business_website'])],
             ['Program',$profile['business_schedule'],null],
         ];
         ?>

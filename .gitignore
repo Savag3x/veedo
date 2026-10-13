@@ -31,3 +31,9 @@ Thumbs.db
 *.sql
 !sql_patch_security.sql
 !database/*.sql
+uploads/chat/*
+!uploads/chat/.gitkeep
+uploads/live_chats/*
+!uploads/live_chats/.htaccess
+!uploads/live_chats/.gitkeep
+!database/migrations/*.sql

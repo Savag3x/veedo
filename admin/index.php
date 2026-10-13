@@ -15,15 +15,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && csrf_verify()) {
     // Complete order manual
     if (isset($_POST['action']) && $_POST['action'] === 'complete_order') {
         $oid = (int)($_POST['order_id'] ?? 0);
-        $ord = DB::fetch("SELECT * FROM orders WHERE id=?", [$oid]);
-        if ($ord && $ord['status'] === 'pending') {
-            DB::update('orders', ['status'=>'completed'], 'id=?', [$oid]);
-            if (str_starts_with($ord['type'], 'boost_')) {
-                $days = (int)str_replace('boost_', '', $ord['type']);
-                DB::query("UPDATE ads SET is_boosted=1, boosted_until=DATE_ADD(NOW(), INTERVAL ? DAY) WHERE id=?", [$days, $ord['ad_id']]);
-            } elseif ($ord['type'] === 'business_verify') {
-                DB::query("UPDATE users SET is_verified_business=1, role='business', business_verified_until=DATE_ADD(NOW(), INTERVAL 1 YEAR) WHERE id=?", [$ord['user_id']]);
-            }
+        require_once __DIR__ . '/../includes/payments.php';
+        if (order_mark_paid($oid)) {
             admin_log('order_complete', 'orders', $oid, 'Comandă marcată completă manual');
             flash('success', 'Comanda #'.$oid.' marcată ca finalizată!');
         }
@@ -49,7 +42,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && csrf_verify()) {
         foreach ($_POST as $k => $v) {
             if ($k === 'csrf_token' || $k === 'active_tab') continue;
             if (in_array($k, $allowed)) {
-                setting_update($k, is_array($v) ? implode(',', $v) : sanitize((string)$v));
+                setting_update($k, is_array($v) ? implode(',', $v) : admin_setting_value($k, (string)$v));
             }
         }
         // Handle checkbox booleans (unchecked = 0)
@@ -236,7 +229,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && csrf_verify()) {
                 'name'        => sanitize($_POST['name'] ?? ''),
                 'slug'        => slug(sanitize($_POST['name'] ?? '')),
                 'icon'        => sanitize($_POST['icon'] ?? '📦'),
-                'color'       => sanitize($_POST['color'] ?? '#888888'),
+                'color'       => safe_color($_POST['color'] ?? '#888888'),
                 'description' => sanitize($_POST['description'] ?? ''),
                 'sort_order'  => (int)($_POST['sort_order'] ?? 0),
                 'is_active'   => (int)isset($_POST['is_active']),
@@ -2043,9 +2036,9 @@ async function testSmtp() {
     $ads_data   = array_map(fn($d) => (int)($ads_by_day[$d]   ?? 0), $days14);
     $users_data = array_map(fn($d) => (int)($users_by_day[$d] ?? 0), $days14);
     ?>
-    const labels = <?= json_encode($labels) ?>;
-    const adsData   = <?= json_encode($ads_data) ?>;
-    const usersData = <?= json_encode($users_data) ?>;
+    const labels = <?= js_json($labels) ?>;
+    const adsData   = <?= js_json($ads_data) ?>;
+    const usersData = <?= js_json($users_data) ?>;
 
     new Chart(canvas, {
         type: 'line',

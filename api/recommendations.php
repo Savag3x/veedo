@@ -5,7 +5,7 @@ header('Content-Type: application/json');
 
 $u = current_user();
 $uid = $u['id'] ?? 0;
-$limit = min((int)($_GET['limit'] ?? 12), 24);
+$limit = max(1, min((int)($_GET['limit'] ?? 12), 24));
 $exclude = (int)($_GET['exclude_ad'] ?? 0);
 
 if (!setting('ai_recommendations','1')) {
@@ -79,6 +79,7 @@ if ($uid) {
     
     // Anunturi din categorii preferate de la vanzatori urmăriti
     if (!empty($cat_scores)) {
+        arsort($cat_scores);
         $top_cats = array_keys(array_slice($cat_scores, 0, 3, true));
         $cats_in = implode(',', array_map('intval', $top_cats));
         
@@ -100,18 +101,21 @@ if ($uid) {
     }
     
     // Anunturi din aceeasi localitate
-    if ($u['city']) {
+    if (!empty($u['city']) && count($recommended) < 4) {
+        // (bug vechi: SQL-ul generat era invalid "IN ( OR 1=0)" când lista era goală)
+        $skip = array_map('intval', array_column($recommended, 'id'));
+        $skip[] = $exclude;
         $local = DB::fetchAll("
             SELECT a.*, c.name as cat_name, c.color as cat_color, c.icon as cat_icon,
                    u.name as user_name, u.avatar as user_avatar, u.is_verified_business,
                    (SELECT path FROM ad_photos WHERE ad_id=a.id AND is_primary=1 LIMIT 1) as main_photo,
                    'local' as rec_reason
             FROM ads a JOIN categories c ON c.id=a.category_id JOIN users u ON u.id=a.user_id
-            WHERE a.status='active' AND a.city=? AND a.user_id != ? AND a.id != ?
-              AND a.id NOT IN (SELECT id FROM ads WHERE id IN (" . implode(',', array_map(fn($r)=>$r['id'], $recommended)) . " OR 1=0))
+            WHERE a.status='active' AND a.city=? AND a.user_id != ?
+              AND a.id NOT IN (" . implode(',', $skip) . ")
             ORDER BY a.is_boosted DESC, a.views_count DESC
             LIMIT ?
-        ", [$u['city'], $uid, $exclude, max(0, 4 - count($recommended))]);
+        ", [$u['city'], $uid, 4 - count($recommended)]);
         $recommended = array_merge($recommended, $local);
     }
 }
@@ -136,7 +140,10 @@ $recommended = array_merge($recommended, $popular);
 $recommended = array_slice($recommended, 0, $limit);
 
 // Adaugam metadata + câmpuri necesare pentru frontend
+// Eliminăm câmpurile interne care nu trebuie expuse public
+$private = ['lat','lng','address','reject_reason','contact_count','meta_title','meta_description','video_path'];
 foreach ($recommended as &$ad) {
+    foreach ($private as $pk) unset($ad[$pk]);
     $ad['rec_label'] = match($ad['rec_reason'] ?? 'popular') {
         'following_category' => '👥 De la urmăriți',
         'local'              => '📍 Din zona ta',

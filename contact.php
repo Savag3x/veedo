@@ -5,17 +5,20 @@ require_once __DIR__ . '/includes/bootstrap.php';
 $sent   = false;
 $errors = [];
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && csrf_verify()) {
-    $name    = sanitize($_POST['name'] ?? '');
-    $email   = sanitize($_POST['email'] ?? '');
-    $subject = sanitize($_POST['subject'] ?? '');
-    $message = sanitize($_POST['message'] ?? '');
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    // Anti-spam: limită pe IP + câmp capcană invizibil (boții îl completează)
+    rate_limit_or_die('contact', 5, 3600);
+    if (!empty($_POST['website'])) { $sent = true; }
+    $name    = mb_substr(no_crlf(sanitize($_POST['name'] ?? '')), 0, 80);
+    $email   = trim((string)($_POST['email'] ?? ''));
+    $subject = mb_substr(no_crlf(sanitize($_POST['subject'] ?? '')), 0, 150);
+    $message = mb_substr(sanitize($_POST['message'] ?? ''), 0, 5000);
 
     if (strlen($name) < 2)     $errors[] = 'Introdu numele tău.';
     if (!filter_var($email, FILTER_VALIDATE_EMAIL)) $errors[] = 'Email invalid.';
     if (strlen($message) < 10) $errors[] = 'Mesajul trebuie să aibă cel puțin 10 caractere.';
 
-    if (empty($errors)) {
+    if (empty($errors) && !$sent) {
         $contact_email = setting('contact_email') ?: setting('site_email') ?: '';
         
         // Trimite email catre admin
@@ -32,12 +35,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && csrf_verify()) {
 
         // Confirmare catre utilizator
         veedo_mail($email, $name, 'Am primit mesajul tău!',
-            "<h2>Mulțumim, {$name}! 📨</h2>
+            "<h2>Mulțumim, " . h($name) . "! 📨</h2>
             <p>Am primit mesajul tău și îți vom răspunde în cel mai scurt timp.</p>
             <div style='background:#F5F5F5;border-left:3px solid #E8380D;padding:12px 16px;border-radius:0 8px 8px 0;margin:12px 0;'>
                 <strong>Subiect:</strong> " . h($subject) . "<br><br>" . nl2br(h(mb_substr($message, 0, 300))) . (mb_strlen($message)>300?'...' : '') . "
             </div>
-            <p style='font-size:13px;color:#888;'>Echipa " . setting('site_name','Veedo') . "</p>"
+            <p style='font-size:13px;color:#888;'>Echipa " . h(setting('site_name','Veedo')) . "</p>"
         );
 
         // Notificare admin in platform
@@ -73,6 +76,7 @@ include __DIR__ . '/includes/header.php';
 
       <div style="background:var(--surface);border:1px solid var(--border-2);border-radius:var(--radius-lg);padding:28px;">
         <form method="POST">
+          <div style="position:absolute;left:-9999px;" aria-hidden="true"><label>Website <input type="text" name="website" tabindex="-1" autocomplete="off"></label></div>
           <?= csrf_field() ?>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
             <div class="form-group">

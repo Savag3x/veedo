@@ -10,11 +10,15 @@ class DB {
                     PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
                     PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
                     PDO::ATTR_EMULATE_PREPARES   => false,
-                    PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci"
+                    // Fusul orar al conexiunii = fusul orar PHP (Europe/Bucharest), altfel NOW() din MySQL
+                    // și date() din PHP diferă cu 2-3 ore ("acum 3 ore" la un comentariu abia postat)
+                    PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci, time_zone = '" . date('P') . "'"
                 ]);
             } catch (PDOException $e) {
+                error_log('[veedo] DB connect: ' . $e->getMessage());
+                http_response_code(503);
                 if (APP_ENV === 'development') {
-                    die("DB Error: " . $e->getMessage());
+                    die("DB Error: " . htmlspecialchars($e->getMessage()));
                 }
                 die("Eroare de conexiune la baza de date. Contactați administratorul.");
             }

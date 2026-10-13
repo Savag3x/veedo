@@ -4,8 +4,8 @@ require_once __DIR__ . '/includes/bootstrap.php';
 
 $u = current_user();
 
-// Sterge stories expirate
-DB::query("UPDATE stories SET is_active=0 WHERE expires_at < NOW() AND is_active=1");
+// Stories expirate sunt filtrate prin expires_at în query-uri; dezactivarea lor se face din cron
+// (înainte era un UPDATE la fiecare afișare a paginii).
 
 // Fetch stories active grupate pe utilizator (urmariti + proprii)
 // Dacă user e logat: stories de la urmăriți + proprii
@@ -271,7 +271,9 @@ include __DIR__ . '/includes/header.php';
 <?php endif; ?>
 
 <script>
-const storyUsersData = <?= json_encode(array_map(fn($su) => ['id'=>$su['id'],'name'=>$su['name'],'avatar'=>avatar_url($su['avatar'],$su['name']),'story_count'=>$su['story_count']], $story_users), JSON_UNESCAPED_UNICODE) ?>;
+function vEsc(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function vSafeUrl(u){if(!u)return '';try{const x=new URL(u,location.href);return /^https?:$/.test(x.protocol)?x.href:'';}catch(e){return '';}}
+const storyUsersData = <?= js_json(array_map(fn($su) => ['id'=>$su['id'],'name'=>$su['name'],'avatar'=>avatar_url($su['avatar'],$su['name']),'story_count'=>$su['story_count']], $story_users), JSON_UNESCAPED_UNICODE) ?>;
 
 let currentUserIdx = 0;
 let currentStoryIdx = 0;
@@ -312,10 +314,10 @@ function renderStory() {
 
     const user = storyUsersData[currentUserIdx];
     document.getElementById('story-header').innerHTML = `
-        <img src="${user.avatar}" style="width:40px;height:40px;border-radius:50%;object-fit:cover;border:2px solid #fff;" alt="">
+        <img src="${vEsc(user.avatar)}" style="width:40px;height:40px;border-radius:50%;object-fit:cover;border:2px solid #fff;" alt="">
         <div>
-          <div style="color:#fff;font-weight:700;font-size:14px;">${user.name}</div>
-          <div style="color:rgba(255,255,255,0.7);font-size:12px;">${s.time_ago}</div>
+          <div style="color:#fff;font-weight:700;font-size:14px;">${vEsc(user.name)}</div>
+          <div style="color:rgba(255,255,255,0.7);font-size:12px;">${vEsc(s.time_ago)}</div>
         </div>`;
 
     if (s.media_type === 'video') {
@@ -336,8 +338,9 @@ function renderStory() {
     }
 
     const cap = document.getElementById('story-caption');
-    cap.innerHTML = `${s.caption ? `<div style="margin-bottom:10px;">${s.caption}</div>` : ''}
-        ${s.link_url ? `<a href="${s.link_url}" style="display:inline-block;background:var(--brand);color:#fff;padding:8px 20px;border-radius:20px;text-decoration:none;font-size:13px;font-weight:600;">${s.link_text || 'Vedere →'}</a>` : ''}`;
+    const safeLink = vSafeUrl(s.link_url);
+    cap.innerHTML = `${s.caption ? `<div style="margin-bottom:10px;">${vEsc(s.caption)}</div>` : ''}
+        ${safeLink ? `<a href="${vEsc(safeLink)}" rel="noopener nofollow" style="display:inline-block;background:var(--brand);color:#fff;padding:8px 20px;border-radius:20px;text-decoration:none;font-size:13px;font-weight:600;">${vEsc(s.link_text || 'Vedere →')}</a>` : ''}`;
 
     // Mark as viewed
     fetch('/api/stories.php', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({action:'view', story_id: s.id})});

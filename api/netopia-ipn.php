@@ -1,6 +1,7 @@
 <?php
 // api/netopia-ipn.php — Netopia IPN (Instant Payment Notification)
 require_once __DIR__ . '/../includes/bootstrap.php';
+require_once __DIR__ . '/../includes/payments.php';
 
 // ── IP Whitelist Netopia ──────────────────────────────────────────────
 // Acceptăm doar request-uri din rețelele Netopia sau din CLI (teste locale)
@@ -54,21 +55,27 @@ try {
     
     if (!$xml_str) throw new Exception('Decryption failed');
     
-    $xml = simplexml_load_string($xml_str);
+    // LIBXML_NONET: fără acces la rețea la parsare (anti-XXE/SSRF)
+    $xml = simplexml_load_string($xml_str, 'SimpleXMLElement', LIBXML_NONET);
     if (!$xml) throw new Exception('Invalid XML');
     
     $order_id  = (string)$xml['id'];
-    $action    = (string)$xml->mobilpay->action ?? '';
-    $error_code = (string)$xml->mobilpay->error['code'] ?? '0';
+    $action     = (string)($xml->mobilpay->action ?? '');
+    $error_code = (string)($xml->mobilpay->error['code'] ?? '0');
+    $paid_amount = (float)($xml->mobilpay->original_amount ?? $xml->mobilpay->processed_amount ?? 0);
     
     $txn = DB::fetch("SELECT * FROM orders WHERE transaction_id=?", [$order_id]);
     
     if ($txn) {
-        if ($error_code === '0' && in_array($action, ['confirmed', 'paid_pending'])) {
-            DB::update('orders', ['status' => 'completed'], 'id=?', [$txn['id']]);
-            apply_transaction($txn);
+        // Doar 'confirmed' înseamnă bani încasați ('paid_pending' = încă în verificare)
+        if ($error_code === '0' && $action === 'confirmed') {
+            if ($paid_amount > 0 && $paid_amount + 0.01 < (float)$txn['amount']) {
+                error_log('[veedo] netopia-ipn: sumă nepotrivită pentru ' . $order_id);
+            } else {
+                order_mark_paid((int)$txn['id']); // atomic + idempotent
+            }
         } elseif ($action === 'canceled' || $error_code !== '0') {
-            DB::update('orders', ['status' => 'failed'], 'id=?', [$txn['id']]);
+            DB::query("UPDATE orders SET status='failed' WHERE id=? AND status='pending'", [$txn['id']]);
         } elseif ($action === 'credit') {
             DB::update('orders', ['status' => 'refunded'], 'id=?', [$txn['id']]);
         }
@@ -77,18 +84,6 @@ try {
 } catch (Exception $e) {
     error_log('Netopia IPN error: ' . $e->getMessage());
     http_response_code(200); // Netopia needs 200 even on error
-}
-
-// Aplica efectul tranzactiei (boost, business verify etc)
-function apply_transaction(array $txn): void {
-    if (str_starts_with($txn['type'], 'boost_')) {
-        $days = (int)str_replace('boost_', '', $txn['type']);
-        if ($txn['ad_id']) {
-            DB::query("UPDATE ads SET is_boosted=1, boosted_until=DATE_ADD(NOW(), INTERVAL ? DAY) WHERE id=?", [$days, $txn['ad_id']]);
-        }
-    } elseif ($txn['type'] === 'business_verify') {
-        DB::query("UPDATE users SET is_verified_business=1, business_verified_until=DATE_ADD(NOW(), INTERVAL 1 YEAR) WHERE id=?", [$txn['user_id']]);
-    }
 }
 
 // Netopia response XML

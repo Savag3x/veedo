@@ -6,8 +6,17 @@
 // Frecvență: o dată pe zi (0 8 * * *)
 // ============================================
 
+// Doar din linia de comandă (cron). Accesat din browser ar permite oricui să declanșeze
+// trimiterea de emailuri în masă și ștergeri în baza de date.
+if (PHP_SAPI !== 'cli') { http_response_code(404); exit; }
+
 define('CRON_MODE', true);
 require_once __DIR__ . '/../includes/bootstrap.php';
+
+// Curățenie periodică (mutată aici din paginile publice)
+DB::query("UPDATE stories SET is_active=0 WHERE is_active=1 AND expires_at < NOW()");
+DB::query("DELETE FROM rate_limits WHERE expires_at < NOW() LIMIT 50000");
+DB::query("UPDATE ads SET is_boosted=0 WHERE is_boosted=1 AND boosted_until IS NOT NULL AND boosted_until < NOW()");
 
 $start = microtime(true);
 $sent  = 0;

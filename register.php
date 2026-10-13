@@ -14,10 +14,11 @@ $vals   = [];
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!csrf_verify()) { $errors[] = 'Eroare de securitate.'; }
     else {
+        rate_limit_or_die('register', 5, 3600); // anti-spam: înainte de orice altă procesare
         $vals = [
-            'name'     => sanitize($_POST['name'] ?? ''),
-            'email'    => sanitize($_POST['email'] ?? ''),
-            'phone'    => sanitize($_POST['phone'] ?? ''),
+            'name'     => mb_substr(sanitize($_POST['name'] ?? ''), 0, 80),
+            'email'    => mb_strtolower(trim((string)($_POST['email'] ?? ''))),
+            'phone'    => clean_phone($_POST['phone'] ?? ''),
             'password' => $_POST['password'] ?? '',
             'confirm'  => $_POST['password_confirm'] ?? '',
             'type'     => in_array($_POST['type'] ?? '', ['user','business']) ? $_POST['type'] : 'user',
@@ -30,14 +31,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (DB::fetch("SELECT id FROM users WHERE email=?", [$vals['email']])) $errors[] = 'Această adresă de email este deja înregistrată.';
         if (!isset($_POST['gdpr'])) $errors[] = 'Trebuie să accepți politica GDPR.';
 
-        if (empty($errors)) {
-            // Rate limit suplimentar anti-spam
-            rate_limit_or_die('register', 5, 3600);
+        if (strlen($vals['password']) > 200) $errors[] = 'Parola este prea lungă.';
 
+        if (empty($errors)) {
             $token = bin2hex(random_bytes(32));
 
             // Track referral din GET / POST / cookie
-            $ref_code    = sanitize($_GET['ref'] ?? $_POST['ref'] ?? $_COOKIE['veedo_ref'] ?? '');
+            $ref_code    = (string)($_GET['ref'] ?? $_POST['ref'] ?? $_COOKIE['veedo_ref'] ?? '');
+            if (!preg_match('/^[A-Za-z0-9_-]{4,32}$/', $ref_code)) $ref_code = '';
             $referrer_id = null;
             if ($ref_code) {
                 $referrer = DB::fetch("SELECT id FROM users WHERE referral_code=?", [$ref_code]);

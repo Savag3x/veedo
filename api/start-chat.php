@@ -6,6 +6,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !csrf_verify()) {
     json_response(['error' => 'Invalid request'], 400);
 }
 
+rate_limit_or_die('start_chat', 20, 3600);
 $uid     = current_user()['id'];
 $ad_id   = (int)($_POST['ad_id'] ?? 0);
 $profile_id = (int)($_POST['profile_id'] ?? 0);
@@ -19,6 +20,7 @@ if ($ad_id) {
     $redirect_back = '/anunt/'.$ad['slug'];
 } elseif ($profile_id) {
     if ($profile_id == $uid) { flash('error','Nu poți trimite mesaj ție însuți.'); redirect('/utilizator/'.$profile_id); }
+    if (!DB::fetch("SELECT id FROM users WHERE id=? AND is_active=1", [$profile_id])) { flash('error','Utilizator negăsit.'); redirect('/'); }
     $seller_id = $profile_id;
     $ad = null;
     $redirect_back = '/utilizator/'.$profile_id;

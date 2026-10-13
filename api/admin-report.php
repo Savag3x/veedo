@@ -1,9 +1,9 @@
 <?php
 // api/admin-report.php
 require_once __DIR__ . '/../includes/bootstrap.php';
-require_moderator();  // we'll define this below
+if (!is_moderator()) { http_response_code(403); die('Acces interzis'); }
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && csrf_verify()) {
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $report_id = (int)($_POST['report_id'] ?? 0);
     $action    = $_POST['action'] ?? '';
 
@@ -22,7 +22,3 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && csrf_verify()) {
     }
 }
 redirect('/admin?s=reports');
-
-function require_moderator(): void {
-    if (!is_moderator()) { http_response_code(403); die('Acces interzis'); }
-}

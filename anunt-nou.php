@@ -14,21 +14,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!csrf_verify()) { $errors[] = 'Eroare de securitate.'; }
     else {
         $vals = [
-            'title'            => sanitize($_POST['title'] ?? ''),
+            'title'            => mb_substr(sanitize($_POST['title'] ?? ''), 0, 150),
             'category_id'      => (int)($_POST['category_id'] ?? 0),
-            'description'      => sanitize_html($_POST['description'] ?? ''),
-            'price'            => strlen($_POST['price'] ?? '') ? (float)$_POST['price'] : null,
+            'description'      => mb_substr(sanitize_html($_POST['description'] ?? ''), 0, 9000),
+            'price'            => strlen($_POST['price'] ?? '') ? max(0, min(9999999999, (float)$_POST['price'])) : null,
             'price_negotiable' => (int)isset($_POST['price_negotiable']),
             'currency'         => in_array($_POST['currency']??'',['RON','EUR','USD']) ? $_POST['currency'] : 'RON',
-            'city'             => sanitize($_POST['city'] ?? ''),
-            'county'           => sanitize($_POST['county'] ?? ''),
-            'contact_phone'    => sanitize($_POST['contact_phone'] ?? ''),
+            'city'             => mb_substr(sanitize($_POST['city'] ?? ''), 0, 100),
+            'county'           => mb_substr(sanitize($_POST['county'] ?? ''), 0, 100),
+            'contact_phone'    => clean_phone($_POST['contact_phone'] ?? ''),
         ];
+
+        // Anti-spam: max 10 anunțuri/oră + limita totală de anunțuri active per utilizator
+        if (!rate_limit('post_ad', 10, 3600)) $errors[] = 'Ai postat prea multe anunțuri într-un timp scurt. Încearcă mai târziu.';
+        $free_limit = (int)setting('free_ads_per_user', '100');
+        if ($free_limit > 0 && !is_moderator()) {
+            $active_cnt = (int)(DB::fetch("SELECT COUNT(*) c FROM ads WHERE user_id=? AND status IN ('active','pending')", [$u['id']])['c'] ?? 0);
+            if ($active_cnt >= $free_limit) $errors[] = "Ai atins limita de {$free_limit} anunțuri active.";
+        }
 
         if (strlen($vals['title']) < (int)setting('min_ad_title_length','10')) {
             $errors[] = 'Titlul trebuie să aibă cel puțin '.(int)setting('min_ad_title_length','10').' caractere.';
         }
-        if (!$vals['category_id']) $errors[] = 'Selectează o categorie.';
+        if (!$vals['category_id'] || !DB::fetch("SELECT id FROM categories WHERE id=? AND is_active=1", [$vals['category_id']])) $errors[] = 'Selectează o categorie.';
         if (strlen($vals['description']) < (int)setting('min_ad_description_length','20')) {
             $errors[] = 'Descrierea trebuie să aibă cel puțin '.(int)setting('min_ad_description_length','20').' de caractere.';
         }
@@ -74,7 +82,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         // Logging — scriem si in fisier vizibil + error_log
                         $_vlog = function($msg) {
                             $line = '[' . date('Y-m-d H:i:s') . "] $msg\n";
-                            @file_put_contents(__DIR__ . '/video-compress.log', $line, FILE_APPEND | LOCK_EX);
                             error_log("[veedo video] $msg");
                         };
                         $ff = find_ffmpeg_binary('ffmpeg');
@@ -159,7 +166,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             try {
                 $all_fields = DB::fetchAll("SELECT * FROM category_fields WHERE category_id=? AND is_active=1", [$vals['category_id']]);
                 foreach ($all_fields as $cf) {
-                    $fval = sanitize($_POST['cf_'.$cf['field_name']] ?? '');
+                    $fval = mb_substr(sanitize((string)($_POST['cf_'.$cf['field_name']] ?? '')), 0, 255);
                     if ($fval) {
                         DB::query("INSERT INTO ad_fields (ad_id, field_id, field_value) VALUES (?,?,?) ON DUPLICATE KEY UPDATE field_value=?",
                             [$ad_id, $cf['id'], $fval, $fval]);
@@ -479,7 +486,7 @@ try {
     }, []);
 } catch (Exception $e) { $all_fields_grouped = []; }
 ?>
-const allCatFields = <?= json_encode($all_fields_grouped) ?>;
+const allCatFields = <?= js_json($all_fields_grouped) ?>;
 
 function loadCategoryFields(catId) {
     const wrap = document.getElementById('category-fields-wrap');

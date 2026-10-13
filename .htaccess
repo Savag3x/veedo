@@ -9,6 +9,17 @@ ServerSignature Off
   RewriteEngine On
   RewriteBase /
 
+  # ---- Forțează HTTPS (dezactivează dacă serverul face deja redirect) ----
+  RewriteCond %{HTTPS} !=on
+  RewriteCond %{HTTP:X-Forwarded-Proto} !=https
+  RewriteCond %{HTTP_HOST} !^(localhost|127\.0\.0\.1)
+  RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
+  # ---- Blochează fișiere/foldere interne (înainte de regula "fișiere reale") ----
+  RewriteRule ^(includes|cron|database|\.git)(/|$) - [F,L]
+  RewriteRule ^uploads/live_chats/ - [F,L]
+  RewriteRule (^|/)\.(?!well-known/) - [F,L]
+
   # ---- Skip real files and directories ----
   RewriteCond %{REQUEST_FILENAME} -f [OR]
   RewriteCond %{REQUEST_FILENAME} -d
@@ -88,7 +99,6 @@ ServerSignature Off
 
   # ---- Admin ----
   RewriteRule ^admin/?$ admin/index.php [L,QSA]
-  RewriteRule ^alerte/?$ alerte.php [L,QSA]
   RewriteRule ^admin/([a-z0-9-]+)/?$ admin/index.php?s=$1 [L,QSA]
 
   # ---- API ----
@@ -102,9 +112,6 @@ ServerSignature Off
   RewriteCond %{HTTP_USER_AGENT} (sqlmap|nikto|nmap|masscan|zgrab|acunetix) [NC]
   RewriteRule .* - [F,L]
 
-  # ---- Blochează accesul direct la includes ----
-  RewriteRule ^includes/.*$ - [F,L]
-
 </IfModule>
 
 # ============================================
@@ -117,9 +124,14 @@ ErrorDocument 500 /404.php
 # ============================================
 # Blochează fișiere sensibile
 # ============================================
-<FilesMatch "(\.env|\.env\.example|\.git|\.gitignore|composer\.lock|package-lock\.json|\.htpasswd|.*\.sql)$">
-  Order allow,deny
-  Deny from all
+<FilesMatch "(^\..*|.*\.(env|sql|log|ini|md|lock|bak|old|orig|swp)|.*~|composer\.json|package\.json)$">
+  <IfModule mod_authz_core.c>
+    Require all denied
+  </IfModule>
+  <IfModule !mod_authz_core.c>
+    Order allow,deny
+    Deny from all
+  </IfModule>
 </FilesMatch>
 
 # ============================================
@@ -127,13 +139,21 @@ ErrorDocument 500 /404.php
 # LiteSpeed suportă mod_headers nativ
 # ============================================
 <IfModule mod_headers.c>
+  # (CSP, HSTS și Permissions-Policy sunt trimise din PHP — includes/security.php)
   Header always set X-Frame-Options "SAMEORIGIN"
   Header always set X-Content-Type-Options "nosniff"
-  Header always set X-XSS-Protection "1; mode=block"
   Header always set Referrer-Policy "strict-origin-when-cross-origin"
-  Header always set Permissions-Policy "geolocation=(), microphone=(), camera=()"
   Header unset X-Powered-By
   Header always unset X-Powered-By
+
+  # Asset-uri versionate (?v=...) — cache lung, imutabil
+  <FilesMatch "\.(css|js|woff2?|svg|png|jpe?g|webp|gif|ico)$">
+    Header set Cache-Control "public, max-age=31536000, immutable"
+  </FilesMatch>
+  # Service worker-ul trebuie mereu revalidat
+  <Files "sw.js">
+    Header set Cache-Control "no-cache"
+  </Files>
 </IfModule>
 
 # ============================================
@@ -151,6 +171,16 @@ ErrorDocument 500 /404.php
   ExpiresByType video/mp4                 "access plus 1 month"
   ExpiresByType font/woff2                "access plus 1 year"
   ExpiresByType text/html                 "access plus 0 seconds"
+</IfModule>
+
+# ============================================
+# Compresie (gzip / brotli) pentru text
+# ============================================
+<IfModule mod_deflate.c>
+  AddOutputFilterByType DEFLATE text/html text/css text/plain text/xml application/javascript application/json application/xml image/svg+xml application/manifest+json
+</IfModule>
+<IfModule mod_brotli.c>
+  AddOutputFilterByType BROTLI_COMPRESS text/html text/css text/plain application/javascript application/json image/svg+xml
 </IfModule>
 
 # ============================================

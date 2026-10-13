@@ -13,7 +13,7 @@ $full = DB::fetch("SELECT * FROM users WHERE id=?", [$u['id']]);
 
 // Generam cod de referral daca nu exista
 if (empty($full['referral_code'])) {
-    $code = strtoupper(substr(md5($u['id'] . 'veedo' . time()), 0, 8));
+    $code = strtoupper(bin2hex(random_bytes(4)));
     DB::update('users', ['referral_code' => $code], 'id=?', [$u['id']]);
     $full['referral_code'] = $code;
 }
@@ -47,22 +47,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && csrf_verify() && isset($_POST['requ
     } elseif (!preg_match('/^[A-Z]{2}[0-9]{2}[A-Z0-9]{4,}$/', $iban)) {
         flash('error', 'IBAN invalid.');
     } else {
-        DB::insert('affiliate_withdrawals', [
-            'user_id' => $u['id'],
-            'amount'  => $stats['balance'],
-            'iban'    => $iban,
-            'status'  => 'pending',
-        ]);
-        // Reset balance
-        DB::update('users', ['affiliate_balance' => 0], 'id=?', [$u['id']]);
-        DB::insert('notifications', [
-            'user_id' => 1, // admin
-            'type'    => 'affiliate_withdraw',
-            'title'   => 'Cerere retragere afiliere — ' . $u['name'],
-            'body'    => 'Sumă: ' . $stats['balance'] . ' RON · IBAN: ' . $iban,
-            'link'    => '/admin?s=orders',
-        ]);
-        flash('success', 'Cererea de retragere a fost trimisă! Vei primi banii în 3-5 zile lucrătoare.');
+        // Atomic: soldul se golește DOAR dacă nu s-a modificat între timp — două cereri
+        // trimise simultan (dublu-click) nu mai pot genera două retrageri pentru același sold.
+        $pdo = DB::get();
+        $pdo->beginTransaction();
+        $row = DB::fetch("SELECT affiliate_balance FROM users WHERE id=? FOR UPDATE", [$u['id']]);
+        $amount = (float)($row['affiliate_balance'] ?? 0);
+        if ($amount >= $min_withdraw) {
+            DB::update('users', ['affiliate_balance' => 0], 'id=?', [$u['id']]);
+            DB::insert('affiliate_withdrawals', [
+                'user_id' => $u['id'],
+                'amount'  => $amount,
+                'iban'    => $iban,
+                'status'  => 'pending',
+            ]);
+            $pdo->commit();
+            foreach (DB::fetchAll("SELECT id FROM users WHERE role='admin' AND is_active=1 LIMIT 10") as $adm) {
+                add_notification((int)$adm['id'], 'affiliate_withdraw', 'Cerere retragere afiliere — ' . $u['name'],
+                    'Sumă: ' . number_format($amount, 2) . ' RON', '/admin?s=orders');
+            }
+            flash('success', 'Cererea de retragere a fost trimisă! Vei primi banii în 3-5 zile lucrătoare.');
+        } else {
+            $pdo->rollBack();
+            flash('error', 'Soldul minim pentru retragere este ' . $min_withdraw . ' RON.');
+        }
         redirect('/cont/afiliere');
     }
 }

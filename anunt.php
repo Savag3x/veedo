@@ -512,17 +512,27 @@ include __DIR__ . '/includes/header.php';
 </div><!-- /layout -->
 </div><!-- /container -->
 
-<script type="application/ld+json">
-{"@context":"https://schema.org","@type":"Product","name":"<?= addslashes(h($oad['title'])) ?>","description":"<?= addslashes(h(mb_substr(strip_tags($oad['description']),0,300))) ?>",<?php if($seo_image): ?>"image":["<?= h($seo_image) ?>"],<?php endif; ?>"offers":{"@type":"Offer","price":"<?= $oad['price']??0 ?>","priceCurrency":"<?= h($oad['currency']) ?>","availability":"https://schema.org/InStock","url":"<?= h($seo_url) ?>"}}
-</script>
+<?php
+$_ld = [
+    '@context' => 'https://schema.org', '@type' => 'Product',
+    'name' => $oad['title'],
+    'description' => mb_substr(strip_tags($oad['description']), 0, 300),
+    'offers' => [
+        '@type' => 'Offer', 'price' => (string)($oad['price'] ?? 0), 'priceCurrency' => $oad['currency'],
+        'availability' => 'https://schema.org/InStock', 'url' => $seo_url,
+    ],
+];
+if ($seo_image) $_ld['image'] = [$seo_image];
+?>
+<script type="application/ld+json"><?= json_ld($_ld) ?></script>
 <?= seo_breadcrumb([
     ['name'=>setting('site_name'),'url'=>BASE_URL],
-    ['name'=>h($oad['cat_name']),'url'=>BASE_URL.'/categorie/'.h($oad['cat_slug'])],
-    ['name'=>h(mb_substr($oad['title'],0,60)),'url'=>$seo_url]
+    ['name'=>$oad['cat_name'],'url'=>BASE_URL.'/categorie/'.$oad['cat_slug']],
+    ['name'=>mb_substr($oad['title'],0,60),'url'=>$seo_url]
 ]) ?>
 
 <script>
-var mediaArr = <?= json_encode(array_map(function($m){ return ['type'=>$m['type'],'src'=>$m['src'],'thumb'=>$m['thumb']?$m['thumb']:$m['src']]; }, $all_media)) ?>;
+var mediaArr = <?= js_json(array_map(function($m){ return ['type'=>$m['type'],'src'=>$m['src'],'thumb'=>$m['thumb']?$m['thumb']:$m['src']]; }, $all_media)) ?>;
 var curM = 0;
 
 function setMedia(idx) {
@@ -560,7 +570,7 @@ function revealPhone(adId) {
             if (d.phone) {
                 // Actualizam sidebar daca exista
                 if (wrap) {
-                    wrap.innerHTML = '<a href="tel:'+d.phone_clean+'" class="btn btn-secondary w-full" style="justify-content:center;font-size:16px;font-weight:700;letter-spacing:1px;">📞 '+d.phone+'</a>';
+                    wrap.innerHTML = '<a href="tel:'+escHtml(d.phone_clean)+'" class="btn btn-secondary w-full" style="justify-content:center;font-size:16px;font-weight:700;letter-spacing:1px;">📞 '+escHtml(d.phone)+'</a>';
                 }
                 // Pe mobile: afisam un popup simplu si redirectam catre tel:
                 if (window.innerWidth <= 900) {
@@ -575,8 +585,8 @@ function revealPhone(adId) {
                     closeBtn.style.cssText = 'background:none;border:none;color:var(--text-3);cursor:pointer;font-size:13px;width:100%;margin-top:4px;';
                     closeBtn.onclick = function(){ popup.remove(); };
                     popup.innerHTML = '<div style="font-size:13px;color:var(--text-3);margin-bottom:10px;">Număr de telefon vânzător</div>'
-                        + '<a href="tel:'+d.phone_clean+'" style="display:block;font-size:1.4rem;font-weight:800;color:var(--brand);text-decoration:none;margin-bottom:14px;">📞 '+d.phone+'</a>'
-                        + '<a href="tel:'+d.phone_clean+'" class="btn btn-primary" style="width:100%;justify-content:center;display:flex;margin-bottom:8px;">Sună acum</a>';
+                        + '<a href="tel:'+escHtml(d.phone_clean)+'" style="display:block;font-size:1.4rem;font-weight:800;color:var(--brand);text-decoration:none;margin-bottom:14px;">📞 '+escHtml(d.phone)+'</a>'
+                        + '<a href="tel:'+escHtml(d.phone_clean)+'" class="btn btn-primary" style="width:100%;justify-content:center;display:flex;margin-bottom:8px;">Sună acum</a>';
                     popup.appendChild(closeBtn);
                     document.body.appendChild(popup);
                     // Auto-close dupa 15 secunde
@@ -783,7 +793,7 @@ if (newComment) {
     });
 }
 
-const media = <?= json_encode(array_map(fn($m) => ['type'=>$m['type'],'src'=>$m['src'],'thumb'=>$m['thumb']], $all_media), JSON_UNESCAPED_UNICODE) ?>;
+const media = <?= js_json(array_map(fn($m) => ['type'=>$m['type'],'src'=>$m['src'],'thumb'=>$m['thumb']], $all_media), JSON_UNESCAPED_UNICODE) ?>;
 let curMedia = 0;
 
 // Lightbox
@@ -886,10 +896,10 @@ document.addEventListener('DOMContentLoaded', function () {
   if (window.Veedo && Veedo.recordView) {
     Veedo.recordView({
       id: <?= (int)$oad['id'] ?>,
-      slug: <?= json_encode($oad['slug'], JSON_UNESCAPED_UNICODE) ?>,
-      title: <?= json_encode($oad['title'], JSON_UNESCAPED_UNICODE) ?>,
-      img: <?= json_encode($all_media[0]['thumb'] ?? '', JSON_UNESCAPED_UNICODE) ?>,
-      price: <?= json_encode($oad['price'] ? format_price((float)$oad['price'], $oad['currency']) : 'Preț la cerere', JSON_UNESCAPED_UNICODE) ?>
+      slug: <?= js_json($oad['slug'], JSON_UNESCAPED_UNICODE) ?>,
+      title: <?= js_json($oad['title'], JSON_UNESCAPED_UNICODE) ?>,
+      img: <?= js_json($all_media[0]['thumb'] ?? '', JSON_UNESCAPED_UNICODE) ?>,
+      price: <?= js_json($oad['price'] ? format_price((float)$oad['price'], $oad['currency']) : 'Preț la cerere', JSON_UNESCAPED_UNICODE) ?>
     });
   }
 });

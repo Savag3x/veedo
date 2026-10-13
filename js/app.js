@@ -32,6 +32,11 @@ const ThemeManager = {
   }
 };
 
+// ---- Escape HTML (pentru orice text inserat cu innerHTML) ----
+function escHtml(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
 // ---- AJAX helper cu CSRF automat ----
 function getCsrfToken() {
   // Încearcă input hidden (în form-uri)
@@ -235,7 +240,7 @@ const Chat = {
     const div = document.createElement('div');
     div.id = 'msg-' + m.id;
     div.className = 'msg ' + (isMine ? 'mine' : 'theirs');
-    div.innerHTML = `<div class="msg-bubble">${this.escHtml(m.body)}</div><div class="msg-time">${m.time_ago}</div>`;
+    div.innerHTML = `<div class="msg-bubble">${escHtml(m.body)}</div><div class="msg-time">${escHtml(m.time_ago)}</div>`;
     wrap.appendChild(div);
     if (m.id > this.lastId) this.lastId = m.id;
   },
@@ -260,9 +265,7 @@ const Chat = {
     });
   },
 
-  escHtml(s) {
-    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  }
+  escHtml(s) { return escHtml(s); }
 };
 
 // ---- Admin: confirm delete ----
@@ -297,7 +300,7 @@ function initSearchAuto() {
         const r = await ajax(`/api/search.php?q=${encodeURIComponent(q)}`, {}, 'GET');
         if (dropdown && r.results) {
           dropdown.innerHTML = r.results.map(item =>
-            `<a href="/anunt/${item.slug}" class="search-suggestion" style="display:block;padding:8px 14px;color:var(--text);text-decoration:none;font-size:14px;border-bottom:1px solid var(--border-2);">${item.title} <span style="color:var(--brand);font-weight:600;">${item.price}</span></a>`
+            `<a href="/anunt/${encodeURIComponent(item.slug)}" class="search-suggestion"><span>${escHtml(item.title)}</span> <b>${escHtml(item.price)}</b></a>`
           ).join('');
           dropdown.style.display = r.results.length ? 'block' : 'none';
         }

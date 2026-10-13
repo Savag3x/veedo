@@ -1,6 +1,6 @@
 <?php
 require_once __DIR__ . '/../includes/bootstrap.php';
-header('Content-Type: application/json');
-if (!is_logged()) { echo '{"count":0}'; exit; }
-$count = (int)DB::fetch("SELECT COUNT(*) as c FROM notifications WHERE user_id=? AND is_read=0", [current_user()['id']])['c'];
-echo json_encode(['count' => $count]);
+header('Cache-Control: no-store');
+if (!is_logged()) json_response(['count' => 0]);
+// Folosește cache-ul din sesiune (TTL 60s) — polling-ul la 30s nu mai lovește DB-ul de fiecare dată
+json_response(['count' => unread_notifications((int)current_user()['id'])]);

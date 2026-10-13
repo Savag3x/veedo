@@ -94,7 +94,45 @@ if ($fav): ?>
 
 })();
 </script>
-  <meta name="csrf-token" content="<?= csrf_token() ?>">
+  <meta name="csrf-token" content="<?= h(csrf_token()) ?>">
+<script>
+/* CSRF automat: atașează tokenul la toate cererile same-origin care modifică date
+   (fetch, XMLHttpRequest și formulare POST), inclusiv cele construite dinamic. */
+(function(){
+  var T=document.querySelector('meta[name="csrf-token"]').content;
+  function same(u){try{return new URL(u,location.href).origin===location.origin;}catch(e){return false;}}
+  function unsafe(m){return !/^(GET|HEAD|OPTIONS)$/i.test(m||'GET');}
+  var of=window.fetch;
+  if(of){window.fetch=function(input,init){
+    init=init||{};
+    var url=typeof input==='string'?input:(input&&input.url)||'';
+    var m=init.method||(input&&input.method)||'GET';
+    if(unsafe(m)&&same(url)){
+      var h=new Headers(init.headers||(input&&input.headers)||{});
+      if(!h.has('X-CSRF-Token'))h.set('X-CSRF-Token',T);
+      init.headers=h;
+      if(!init.credentials)init.credentials='same-origin';
+    }
+    return of.call(this,input,init);
+  };}
+  var xo=XMLHttpRequest.prototype.open,xs=XMLHttpRequest.prototype.send;
+  XMLHttpRequest.prototype.open=function(m,u){this._vm=m;this._vu=u;return xo.apply(this,arguments);};
+  XMLHttpRequest.prototype.send=function(){
+    if(unsafe(this._vm)&&same(this._vu)){try{this.setRequestHeader('X-CSRF-Token',T);}catch(e){}}
+    return xs.apply(this,arguments);
+  };
+  function arm(f){
+    if(!f||!/^post$/i.test(f.method||'')||!same(f.action||location.href))return;
+    if(!f.querySelector('input[name="csrf_token"]')){
+      var i=document.createElement('input');i.type='hidden';i.name='csrf_token';i.value=T;f.appendChild(i);
+    }
+  }
+  document.addEventListener('submit',function(e){arm(e.target);},true);
+  var fs=HTMLFormElement.prototype.submit;
+  HTMLFormElement.prototype.submit=function(){arm(this);return fs.apply(this,arguments);};
+  window.VEEDO_CSRF=T;
+})();
+</script>
 <?php
 $custom_css = setting('custom_css', '');
 if ($custom_css):
@@ -304,3 +342,4 @@ document.querySelectorAll('.dropdown-item').forEach(function(item) {
 
 <?php if (isset($extra_head)) echo $extra_head; ?>
 <main id="main-content">
+<?php flash_render(); ?>

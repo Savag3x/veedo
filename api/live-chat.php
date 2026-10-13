@@ -20,9 +20,11 @@ if (!is_dir($chat_dir)) {
     file_put_contents($chat_dir . '.htaccess', "deny from all\n");
 }
 
-// Curatam chaturile vechi (fisiere mai vechi de 7 zile)
-foreach (glob($chat_dir . 'stream_*.json') as $f) {
-    if (filemtime($f) < time() - 7 * 86400) @unlink($f);
+// Curatam chaturile vechi (>7 zile) — rar (1% din cereri), nu la fiecare poll
+if (mt_rand(1, 100) === 1) {
+    foreach (glob($chat_dir . '{stream,ended,rl}_*.{json,txt}', GLOB_BRACE) ?: [] as $f) {
+        if (filemtime($f) < time() - 7 * 86400) @unlink($f);
+    }
 }
 
 // Citim mesajele existente
@@ -37,6 +39,7 @@ function write_chat(string $file, array $msgs): void {
     // Pastram doar ultimele 500 mesaje
     if (count($msgs) > 500) $msgs = array_slice($msgs, -500);
     $fh = fopen($file, 'c');
+    if (!$fh) return;
     if (flock($fh, LOCK_EX)) {
         ftruncate($fh, 0);
         rewind($fh);
@@ -79,7 +82,7 @@ if ($method === 'GET') {
 if ($method === 'POST') {
     if (!$u) json_response(['error' => 'Trebuie să fii conectat.', 'redirect' => '/login'], 401);
 
-    $data = json_decode(file_get_contents('php://input'), true);
+    $data = request_json();
 
     // Delete mesaj (owner sau admin)
     if (!empty($data['delete_id']) && ($u['id'] == $stream['user_id'] || $u['role'] === 'admin')) {
@@ -101,10 +104,11 @@ if ($method === 'POST') {
         json_response(['ok' => true]);
     }
 
-    // Trimite mesaj
-    $msg = trim(sanitize($data['message'] ?? ''));
-    if (strlen($msg) < 1)   json_response(['error' => 'Mesajul e gol.'], 400);
-    if (strlen($msg) > 300) json_response(['error' => 'Max 300 caractere.'], 400);
+    // Trimite mesaj (doar pe stream-uri live)
+    if ($stream['status'] !== 'live') json_response(['error' => 'Stream-ul nu este live.'], 400);
+    $msg = trim(sanitize((string)($data['message'] ?? '')));
+    if (mb_strlen($msg) < 1)   json_response(['error' => 'Mesajul e gol.'], 400);
+    if (mb_strlen($msg) > 300) json_response(['error' => 'Max 300 caractere.'], 400);
 
     // Rate limit simplu per user (fisier)
     $rl_file = $chat_dir . 'rl_' . $u['id'] . '.txt';

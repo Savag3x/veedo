@@ -2,6 +2,7 @@
 // api/live-viewers.php — Heartbeat vizualizatori live
 require_once __DIR__ . '/../includes/bootstrap.php';
 header('Content-Type: application/json; charset=utf-8');
+rate_limit_or_die('live_hb', 12, 60);
 
 $stream_id = (int)($_POST['stream_id'] ?? $_GET['stream_id'] ?? 0);
 if (!$stream_id) json_response(['error' => 'Invalid'], 400);
