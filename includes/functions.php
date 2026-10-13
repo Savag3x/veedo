@@ -324,18 +324,39 @@ function truncate(string $text, int $len = 100, string $suffix = '...'): string 
 
 // ---- URL / Media helpers ----
 function avatar_url(?string $path, string $name = ''): string {
-    if ($path) return BASE_URL . '/uploads/avatars/' . $path;
-    return 'https://ui-avatars.com/api/?name=' . urlencode($name) . '&background=FF3B30&color=fff&size=100';
+    if ($path) return preg_match('~^https?://~i', $path) ? $path : BASE_URL . '/uploads/avatars/' . rawurlencode($path);
+    return avatar_placeholder($name);
+}
+
+/**
+ * Avatar cu inițiale generat local (SVG data-URI).
+ * Înlocuiește ui-avatars.com: zero cereri externe și numele utilizatorilor nu mai pleacă la terți.
+ */
+function avatar_placeholder(string $name): string {
+    static $memo = [];
+    if (isset($memo[$name])) return $memo[$name];
+    $parts = preg_split('/\s+/u', trim($name)) ?: [];
+    $ini = '';
+    foreach (array_slice(array_filter($parts), 0, 2) as $p) $ini .= mb_strtoupper(mb_substr($p, 0, 1));
+    if ($ini === '') $ini = '?';
+    $palette = ['#E8380D', '#7C3AED', '#0EA5E9', '#10B981', '#F59E0B', '#EC4899', '#6366F1', '#14B8A6'];
+    $bg = $palette[crc32($name) % count($palette)];
+    $svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" fill="' . $bg . '"/>'
+         . '<text x="50%" y="50%" dy=".36em" text-anchor="middle" font-family="system-ui,sans-serif" font-size="26" font-weight="700" fill="#fff">'
+         . htmlspecialchars($ini, ENT_QUOTES | ENT_XML1, 'UTF-8') . '</text></svg>';
+    return $memo[$name] = 'data:image/svg+xml;charset=utf-8,' . rawurlencode($svg);
 }
 
 function thumb_url(?string $path): string {
     if (!$path) return BASE_URL . '/assets/no-video.jpg';
-    return BASE_URL . '/uploads/thumbs/' . $path;
+    if (preg_match('~^https?://~i', $path)) return $path;
+    return BASE_URL . '/uploads/thumbs/' . rawurlencode($path);
 }
 
 function photo_url(?string $path): string {
     if (!$path) return BASE_URL . '/assets/no-photo.jpg';
-    return BASE_URL . '/uploads/photos/' . $path;
+    if (preg_match('~^https?://~i', $path)) return $path;
+    return BASE_URL . '/uploads/photos/' . rawurlencode($path);
 }
 
 function og_image(string $photo = '', string $category_icon = ''): string {

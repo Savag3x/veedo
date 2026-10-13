@@ -554,9 +554,10 @@ include __DIR__ . '/../includes/header.php';
 </div>
 
 <!-- Chart.js -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <script>
 (function() {
+    if (typeof Chart === 'undefined') return; // CDN indisponibil: pagina funcționează fără grafic
     const labels = <?= $chart_labels ?>;
     const views  = <?= $chart_views ?>;
     const likes  = <?= $chart_likes ?>;

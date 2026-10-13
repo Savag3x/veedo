@@ -2,35 +2,28 @@
    VEEDO.RO - Main JavaScript
    ============================================ */
 
-// ---- Theme Manager ----
-const ThemeManager = {
-  init() {
-    // Prioritizeaza tema de pe server (setata de admin sau preferinta user)
-    const serverTheme = document.documentElement.dataset.defaultTheme || 'light';
-    // Foloseste localStorage doar daca userul a ales manual tema in aceasta sesiune
-    const userChose = sessionStorage.getItem('veedo_theme_chosen');
-    const saved = userChose ? (localStorage.getItem('veedo_theme') || serverTheme) : serverTheme;
-    this.apply(saved);
-    document.querySelectorAll('.theme-toggle').forEach(btn => {
-      btn.addEventListener('click', () => this.toggle());
-    });
-  },
+// ---- Temă (light / dark / auto) ----
+// Preferința se salvează local + în contul utilizatorului (api/theme.php).
+const VeedoTheme = {
+  current() { return document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light'; },
   apply(theme) {
-    document.documentElement.dataset.theme = theme;
-    localStorage.setItem('veedo_theme', theme);
-    document.querySelectorAll('.theme-toggle').forEach(btn => {
-      btn.innerHTML = theme === 'dark'
-        ? '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9z"/></svg>'
-        : '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>';
+    document.documentElement.setAttribute('data-theme', theme);
+    try { localStorage.setItem('veedo_theme', theme); } catch (e) {}
+    document.querySelectorAll('.theme-label').forEach(el => {
+      el.textContent = theme === 'dark' ? 'Temă luminoasă' : 'Temă întunecată';
     });
   },
   toggle() {
-    const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
-    sessionStorage.setItem('veedo_theme_chosen', '1');
+    const next = this.current() === 'dark' ? 'light' : 'dark';
     this.apply(next);
-    fetch('/api/theme.php', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({theme: next}) });
+    fetch('/api/theme.php', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({theme: next}) }).catch(() => {});
+  },
+  init() {
+    this.apply(this.current());
+    document.querySelectorAll('.theme-toggle').forEach(btn => btn.addEventListener('click', () => this.toggle()));
   }
 };
+window.VeedoTheme = VeedoTheme;
 
 // ---- Escape HTML (pentru orice text inserat cu innerHTML) ----
 function escHtml(s) {
@@ -168,8 +161,12 @@ function initVideoCards() {
 // ---- Flash messages auto-dismiss ----
 function initAlerts() {
   document.querySelectorAll('.alert[data-auto-dismiss]').forEach(el => {
-    setTimeout(() => el.style.transition = 'opacity 0.5s', 3000);
-    setTimeout(() => el.remove(), 3500);
+    setTimeout(() => { el.style.transition = 'opacity .5s'; el.style.opacity = '0'; }, 4000);
+    setTimeout(() => el.remove(), 4600);
+  });
+  // Toast-uri (mesaje flash): dispar după 5s; erorile rămân până la închidere
+  document.querySelectorAll('.toast[data-auto-dismiss]:not(.toast-error)').forEach(el => {
+    setTimeout(() => { el.classList.add('out'); setTimeout(() => el.remove(), 320); }, 5000);
   });
 }
 
@@ -314,7 +311,7 @@ function initSearchAuto() {
 
 // ---- Init all ----
 document.addEventListener('DOMContentLoaded', () => {
-  ThemeManager.init();
+  VeedoTheme.init();
   initLikes();
   initFavorites();
   initCatPills();

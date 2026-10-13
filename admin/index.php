@@ -256,6 +256,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && csrf_verify()) {
                 admin_log('category_delete', 'categories', $cat_id);
             }
         }
+        cache_forget('footer_cats');
         redirect('/admin?s=categories');
     }
 
@@ -288,6 +289,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && csrf_verify()) {
                 flash('success', 'Pagina a fost creată!');
             }
             admin_log('page_save', 'pages', $page_id, $title);
+            cache_forget('footer_pages');
         } elseif (isset($_POST['action']) && $_POST['action'] === 'delete') {
             $page_id = (int)$_POST['page_id'];
             DB::query("DELETE FROM pages WHERE id=?", [$page_id]);
@@ -2017,11 +2019,11 @@ async function testSmtp() {
 </div><!-- /admin-layout -->
 
 <?php if ($section === 'dashboard'): ?>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <script>
 (function() {
     const canvas = document.getElementById('activity-chart');
-    if (!canvas) return;
+    if (!canvas || typeof Chart === 'undefined') return;
 
     // Pregatim datele din PHP
     <?php

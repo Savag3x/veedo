@@ -10,9 +10,9 @@ $conversations = DB::fetchAll("
     SELECT c.*,
            a.title AS ad_title, a.slug AS ad_slug,
            (SELECT path FROM ad_photos WHERE ad_id=a.id AND is_primary=1 LIMIT 1) AS ad_photo,
-           IF(c.buyer_id=?, u2.name,  u3.name)   AS other_name,
-           IF(c.buyer_id=?, u2.avatar,u3.avatar)  AS other_avatar,
-           IF(c.buyer_id=?, u2.id,    u3.id)      AS other_id,
+           IF(c.buyer_id=?, u3.name,  u2.name)   AS other_name,
+           IF(c.buyer_id=?, u3.avatar,u2.avatar)  AS other_avatar,
+           IF(c.buyer_id=?, u3.id,    u2.id)      AS other_id,
            IF(c.buyer_id=?, c.buyer_unread, c.seller_unread) AS my_unread
     FROM conversations c
     LEFT JOIN ads a ON a.id=c.ad_id
@@ -29,9 +29,9 @@ if ($conv_id) {
         SELECT c.*, a.title AS ad_title, a.slug AS ad_slug, a.id AS ad_id,
                a.price AS ad_price, a.currency AS ad_currency,
                (SELECT path FROM ad_photos WHERE ad_id=a.id AND is_primary=1 LIMIT 1) AS ad_photo,
-               IF(c.buyer_id=?,u2.name, u3.name)   AS other_name,
-               IF(c.buyer_id=?,u2.avatar,u3.avatar) AS other_avatar,
-               IF(c.buyer_id=?,u2.id,   u3.id)     AS other_id
+               IF(c.buyer_id=?,u3.name, u2.name)   AS other_name,
+               IF(c.buyer_id=?,u3.avatar,u2.avatar) AS other_avatar,
+               IF(c.buyer_id=?,u3.id,   u2.id)     AS other_id
         FROM conversations c
         LEFT JOIN ads a ON a.id=c.ad_id
         JOIN users u2 ON u2.id=c.buyer_id

@@ -679,9 +679,7 @@ function renderComments(comments) {
 }
 
 function renderComment(cm, isReply) {
-    const avatarUrl = cm.user_avatar
-        ? '/uploads/avatars/' + cm.user_avatar
-        : 'https://ui-avatars.com/api/?name=' + encodeURIComponent(cm.user_name) + '&background=E8380D&color=fff&size=100';
+    const avatarUrl = escHtml(cm.avatar_url || '');
 
     const verified = cm.is_verified_business ? ' <span style="color:var(--info);font-size:11px;">✓</span>' : '';
     const deleteBtn = (CURRENT_USER_ID && CURRENT_USER_ID == cm.user_id)
@@ -697,11 +695,11 @@ function renderComment(cm, isReply) {
         ? `<button onclick="showReply(${cm.id})" style="background:none;border:none;color:var(--text-3);font-size:12px;cursor:pointer;padding:0;">↩ Răspunde</button>` : '';
 
     return `<div id="comment-${cm.id}" style="display:flex;gap:10px;margin-bottom:16px;">
-        <img src="${avatarUrl}" width="34" height="34" style="border-radius:50%;object-fit:cover;flex-shrink:0;" alt="">
+        <img src="${avatarUrl}" width="34" height="34" loading="lazy" style="border-radius:50%;object-fit:cover;flex-shrink:0;" alt="">
         <div style="flex:1;">
             <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px;">
                 <strong style="font-size:13px;">${escHtml(cm.user_name)}${verified}</strong>
-                <span style="font-size:11px;color:var(--text-3);">${cm.time_ago}</span>
+                <span style="font-size:11px;color:var(--text-3);">${escHtml(cm.time_ago)}</span>
                 <span style="margin-left:auto;display:flex;gap:8px;">${replyBtn} ${deleteBtn}</span>
             </div>
             <div style="font-size:14px;line-height:1.5;color:var(--text-2);">${escHtml(cm.body)}</div>

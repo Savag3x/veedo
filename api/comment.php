@@ -35,10 +35,12 @@ if ($method === 'GET') {
         foreach ($replies as $r) {
             if (count($by_parent[$r['parent_id']] ?? []) >= 10) continue;
             $r['time_ago'] = time_ago($r['created_at']);
+            $r['avatar_url'] = avatar_url($r['user_avatar'], $r['user_name']);
             $by_parent[$r['parent_id']][] = $r;
         }
     }
     foreach ($comments as &$cm) {
+        $cm['avatar_url'] = avatar_url($cm['user_avatar'], $cm['user_name']);
         $cm['time_ago'] = time_ago($cm['created_at']);
         $cm['replies']  = $by_parent[$cm['id']] ?? [];
     }
@@ -94,6 +96,7 @@ if ($method === 'POST') {
 
     $comment = DB::fetch("SELECT c.id, c.ad_id, c.user_id, c.parent_id, c.body, c.created_at, u.name as user_name, u.avatar as user_avatar FROM ad_comments c JOIN users u ON u.id=c.user_id WHERE c.id=?", [$comment_id]);
     $comment['time_ago'] = time_ago($comment['created_at']);
+    $comment['avatar_url'] = avatar_url($comment['user_avatar'], $comment['user_name']);
     $comment['replies'] = [];
 
     json_response(['comment' => $comment, 'success' => true]);

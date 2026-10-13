@@ -65,7 +65,7 @@ if ($method === 'GET') {
     // Formatam pentru JS
     foreach ($new as &$m) {
         if (empty($m['avatar_url'])) {
-            $m['avatar_url'] = 'https://ui-avatars.com/api/?name=' . urlencode($m['user_name']) . '&background=E8380D&color=fff&size=60';
+            $m['avatar_url'] = avatar_placeholder((string)$m['user_name']);
         }
     }
 
@@ -123,9 +123,7 @@ if ($method === 'POST') {
     $max_id = empty($msgs) ? 0 : max(array_column($msgs, 'id'));
     $new_id = $max_id + 1;
 
-    $avatar_url = $u['avatar']
-        ? BASE_URL . '/uploads/avatars/' . $u['avatar']
-        : 'https://ui-avatars.com/api/?name=' . urlencode($u['name']) . '&background=E8380D&color=fff&size=60';
+    $avatar_url = avatar_url($u['avatar'], $u['name']);
 
     $new_msg = [
         'id'         => $new_id,

@@ -2,6 +2,7 @@
 // public/sitemap.php
 require_once __DIR__ . '/includes/bootstrap.php';
 header('Content-Type: application/xml; charset=utf-8');
+header('Cache-Control: public, max-age=3600');
 $base = BASE_URL;
 $ads = DB::fetchAll("SELECT slug, updated_at FROM ads WHERE status='active' ORDER BY updated_at DESC LIMIT 5000");
 $cats = DB::fetchAll("SELECT slug FROM categories WHERE is_active=1");

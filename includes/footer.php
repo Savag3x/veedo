@@ -1,5 +1,6 @@
 <?php
-$pages = DB::fetchAll("SELECT title, slug FROM pages WHERE is_active=1 AND in_footer=1 ORDER BY sort_order");
+// Cache 5 min (APCu) — interogările rulau la fiecare afișare de pagină
+$pages = cache_remember('footer_pages', 300, fn() => DB::fetchAll("SELECT title, slug FROM pages WHERE is_active=1 AND in_footer=1 ORDER BY sort_order"));
 $fb = setting('social_facebook');
 $ig = setting('social_instagram');
 $tt = setting('social_tiktok');
@@ -8,26 +9,33 @@ $yr = date('Y');
 </main><!-- /main -->
 
 <footer class="site-footer" role="contentinfo">
-  <div class="footer-grid">
+  <?php if (!is_logged() || !str_starts_with(strtok($_SERVER['REQUEST_URI'] ?? '/', '?'), '/anunt/nou')): ?>
+  <div class="footer-cta">
+    <div>
+      <h3>Ai ceva de vândut? Arată-l într-un video.</h3>
+      <p>Anunțurile cu video primesc mai multe vizualizări și mesaje. Postarea e gratuită.</p>
+    </div>
+    <a href="/anunt/nou" class="btn btn-primary btn-lg btn-pill">Adaugă anunț gratuit</a>
+  </div>
+  <?php endif; ?>
 
+  <div class="footer-grid">
     <div class="footer-col">
-      <div style="margin-bottom:10px;">
-        <?php $logo = setting('site_logo'); ?>
+      <?php $logo = safe_url(setting('site_logo'), true); ?>
+      <div class="footer-brand">
         <?php if ($logo): ?>
-          <img src="<?= h($logo) ?>" alt="<?= h(setting('site_name','Veedo')) ?>" style="height:32px;width:auto;max-width:150px;object-fit:contain;">
+          <img src="<?= h($logo) ?>" alt="<?= h(setting('site_name','Veedo')) ?>" style="height:32px;width:auto;max-width:160px;object-fit:contain;" loading="lazy">
         <?php else: ?>
-          <div style="display:flex;align-items:center;gap:9px;">
-            <svg viewBox="0 0 120 120" width="30" height="30" aria-hidden="true"><defs><linearGradient id="vdvf" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FF8A4C"/><stop offset=".5" stop-color="#E8380D"/><stop offset="1" stop-color="#C42409"/></linearGradient></defs><path d="M30 32 L60 86 L90 32" fill="none" stroke="url(#vdvf)" stroke-width="25" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            <span style="font-family:var(--font-display);font-size:1.4rem;font-weight:800;letter-spacing:-0.5px;color:var(--text);">veedo</span>
-          </div>
+          <svg viewBox="0 0 120 120" width="30" height="30" aria-hidden="true"><rect x="4" y="4" width="112" height="112" rx="34" fill="#FF4A1C"/><path d="M38 40 L60 82 L82 40" fill="none" stroke="#fff" stroke-width="15" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          veedo
         <?php endif; ?>
       </div>
-      <p style="font-size:14px;color:var(--text-3);line-height:1.6;"><?= h(setting('site_tagline','Anunțuri video. Simplu. Rapid.')) ?></p>
+      <p><?= h(setting('site_tagline','Anunțuri video. Simplu. Rapid.')) ?> <?= h(setting('site_description', '')) ?></p>
       <?php if ($fb || $ig || $tt): ?>
-      <div style="display:flex;gap:10px;margin-top:16px;">
-        <?php if ($fb): ?><a href="<?= h($fb) ?>" target="_blank" rel="noopener" style="color:var(--text-3);" title="Facebook">📘</a><?php endif; ?>
-        <?php if ($ig): ?><a href="<?= h($ig) ?>" target="_blank" rel="noopener" style="color:var(--text-3);" title="Instagram">📸</a><?php endif; ?>
-        <?php if ($tt): ?><a href="<?= h($tt) ?>" target="_blank" rel="noopener" style="color:var(--text-3);" title="TikTok">🎵</a><?php endif; ?>
+      <div class="footer-social">
+        <?php if ($fb = safe_url($fb)): ?><a href="<?= h($fb) ?>" target="_blank" rel="noopener" aria-label="Facebook"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M14 8h3V4h-3c-2.8 0-4 1.8-4 4.3V10H7v4h3v8h4v-8h3l1-4h-4V8.6c0-.4.3-.6.6-.6z"/></svg></a><?php endif; ?>
+        <?php if ($ig = safe_url($ig)): ?><a href="<?= h($ig) ?>" target="_blank" rel="noopener" aria-label="Instagram"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor"/></svg></a><?php endif; ?>
+        <?php if ($tt = safe_url($tt)): ?><a href="<?= h($tt) ?>" target="_blank" rel="noopener" aria-label="TikTok"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M16.5 3c.4 2.3 1.8 3.8 4 4v3.2c-1.5 0-2.9-.4-4-1.2v6.6A6.1 6.1 0 1 1 10.4 9.5v3.3a2.9 2.9 0 1 0 2.9 2.8V3z"/></svg></a><?php endif; ?>
       </div>
       <?php endif; ?>
     </div>
@@ -38,57 +46,60 @@ $yr = date('Y');
         <li><a href="/cauta">Toate anunțurile</a></li>
         <li><a href="/cauta?video=1">Anunțuri video</a></li>
         <li><a href="/cauta?verified=1">Vânzători verificați</a></li>
-        <li><a href="/anunt/nou">Postează anunț</a></li>
-        <li><a href="/feed">Feed personalizat</a></li>
-        <?php if(setting_bool("feature_explore")): ?><li><a href="/explore">🔥 Explore</a></li><?php endif; ?>
-        <?php if(setting_bool("feature_stories")): ?><li><a href="/stories">📸 Stories</a></li><?php endif; ?>
-        <?php if(setting_bool("feature_live")): ?><li><a href="/live">🔴 LIVE Shopping</a></li><?php endif; ?>
+        <?php if(setting_bool("feature_explore")): ?><li><a href="/explore">Explore</a></li><?php endif; ?>
+        <?php if(setting_bool("feature_stories")): ?><li><a href="/stories">Stories</a></li><?php endif; ?>
+        <?php if(setting_bool("feature_live")): ?><li><a href="/live">LIVE Shopping</a></li><?php endif; ?>
       </ul>
     </div>
 
     <div class="footer-col">
-      <h4>Categorii populare</h4>
+      <h4>Categorii</h4>
       <ul class="footer-links">
         <?php
-        $cats = DB::fetchAll("SELECT id, name, icon FROM categories WHERE is_active=1 AND parent_id IS NULL ORDER BY sort_order LIMIT 6");
+        $cats = cache_remember('footer_cats', 300, fn() => DB::fetchAll("SELECT id, name, slug, icon FROM categories WHERE is_active=1 AND parent_id IS NULL ORDER BY sort_order LIMIT 6"));
         foreach ($cats as $c): ?>
-          <li><a href="/cauta?cat=<?= (int)$c['id'] ?>"><?= h($c['icon']) ?> <?= h($c['name']) ?></a></li>
+          <li><a href="/categorie/<?= h($c['slug']) ?>"><?= h($c['name']) ?></a></li>
         <?php endforeach; ?>
       </ul>
     </div>
 
     <div class="footer-col">
-      <h4>Informații</h4>
+      <h4>Veedo</h4>
       <ul class="footer-links">
         <?php foreach ($pages as $p): ?>
           <li><a href="/pagina/<?= h($p['slug']) ?>"><?= h($p['title']) ?></a></li>
         <?php endforeach; ?>
         <li><a href="/contact">Contact</a></li>
-        <?php if(setting_bool("feature_afiliere")): ?><li><a href="/afiliere">💰 Program Afiliere</a></li><?php endif; ?>
-        <?php if(setting_bool("feature_alerte")): ?><li><a href="/alerte">🔔 Alerte căutare</a></li><?php endif; ?>
-        <li><a href="/sitemap.xml">Sitemap</a></li>
+        <?php if(setting_bool("feature_afiliere")): ?><li><a href="/afiliere">Program afiliere</a></li><?php endif; ?>
+        <?php if(setting_bool("feature_alerte")): ?><li><a href="/alerte">Alerte căutare</a></li><?php endif; ?>
+        <li><button type="button" class="theme-toggle" style="background:none;border:0;color:#D6D4DD;font-size:14.5px;cursor:pointer;padding:0">◐ <span class="theme-label">Temă întunecată</span></button></li>
       </ul>
     </div>
-
   </div>
 
   <div class="footer-bottom">
-    <?= h(setting('footer_text', "© $yr Veedo.ro - Toate drepturile rezervate")) ?>
-    &nbsp;·&nbsp;
-    <a href="/pagina/termeni-si-conditii">Termeni și condiții</a>
-    &nbsp;·&nbsp;
-    <a href="/pagina/politica-confidentialitate">Confidențialitate</a>
-    &nbsp;·&nbsp;
-    <a href="/pagina/politica-cookies">Cookies</a>
-    &nbsp;·&nbsp;
-    <a href="/pagina/despre-noi">Despre noi</a>
+    <span><?= h(setting('footer_text', "© $yr Veedo.ro - Toate drepturile rezervate")) ?></span>
+    <nav aria-label="Legal">
+      <a href="/pagina/termeni-si-conditii">Termeni și condiții</a>
+      <a href="/pagina/politica-confidentialitate">Confidențialitate</a>
+      <a href="/pagina/politica-cookies">Cookies</a>
+      <a href="/sitemap.xml">Sitemap</a>
+    </nav>
   </div>
 </footer>
 
-<script src="/js/image-compress.js?v=20260522"></script>
-<script src="/js/recently-viewed.js?v=20260524"></script>
-<script src="/js/video-upload-progress.js?v=20260529"></script>
-<script src="/js/app.js?v=20260415"></script>
+<?php
+// Scripturile de upload se încarcă doar pe paginile care au formulare de upload
+$_sp = $_SERVER['SCRIPT_NAME'] ?? '';
+$_needs_upload = (bool)preg_match('~/(anunt-nou|anunt-editeaza|stories|mesaje|live-start)\.php$|/cont/setari\.php$~', $_sp);
+$_v = '20261013';
+?>
+<?php if ($_needs_upload): ?>
+<script src="/js/image-compress.js?v=<?= $_v ?>" defer></script>
+<script src="/js/video-upload-progress.js?v=<?= $_v ?>" defer></script>
+<?php endif; ?>
+<script src="/js/recently-viewed.js?v=<?= $_v ?>" defer></script>
+<script src="/js/app.js?v=<?= $_v ?>" defer></script>
 <?= $extra_js ?? '' ?>
 
 <?php if (is_logged() && defined('VAPID_PUBLIC_KEY') && VAPID_PUBLIC_KEY): ?>
