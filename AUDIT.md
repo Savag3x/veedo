@@ -120,7 +120,22 @@ Măsurat local: paginile se generează în 5–15 ms, cu 4–20 interogări SQL.
   pornește la hover** (fără sunet). Categoriile sunt tile-uri mari pe un rail orizontal.
 - Footer cu CTA în gradient și wordmark „veedo” uriaș; dock plutitor pe mobil cu buton central „+”.
 
-## 6. Recomandări rămase (nu au fost implementate)
+## 6. Date demo
+
+Platforma poate fi populată cu date demo realiste (16 utilizatori dintre care 7 business verificați, 52 de anunțuri
+în toate categoriile, cu 3–4 poze fiecare, câmpuri specifice categoriei, like-uri, comentarii cu răspunsuri, recenzii,
+urmăriri, conversații și stories):
+
+- **Din Admin → 🧪 Date demo** (`/admin/demo-data.php`) — un buton, fără SSH.
+- **Din linia de comandă:** `php database/seed-demo.php` (opțiuni: `--revive` prelungește anunțurile reale expirate,
+  `--offline` generează pozele local, `--remove` șterge doar datele demo).
+
+Pozele reale se descarcă în paralel de pe LoremFlickr (licențe Creative Commons) după cuvinte cheie potrivite anunțului;
+dacă serverul nu are acces la internet, se generează automat imagini „copertă” în stilul noului design.
+Toți utilizatorii demo au email `@demo.veedo.ro` și o parolă aleatorie (nimeni nu se poate autentifica în conturile lor),
+iar la fiecare rulare datele demo anterioare (inclusiv fișierele) sunt șterse — conținutul real nu este atins.
+
+## 7. Recomandări rămase (nu au fost implementate)
 
 - **CSP strict fără `'unsafe-inline'`**: paginile au mult JavaScript inline și handler-e `onclick=`. Mutarea lor în
   fișiere `.js` ar permite un CSP cu nonce — cea mai bună protecție suplimentară împotriva XSS.
@@ -133,7 +148,7 @@ Măsurat local: paginile se generează în 5–15 ms, cu 4–20 interogări SQL.
 
 ---
 
-## 7. Fișiere noi
+## 8. Fișiere noi
 
 - `includes/security.php` — headere, CSRF global, validatori (URL, telefon, culoare, push endpoint), upload securizat
 - `includes/payments.php` — aplicarea atomică a plăților, verificare semnătură Stripe
@@ -141,3 +156,4 @@ Măsurat local: paginile se generează în 5–15 ms, cu 4–20 interogări SQL.
 - `database/schema.sql` — structura bazei de date (fără date personale)
 - `database/migrations/2026-10-13_securitate_performanta.sql`
 - `.env.example`
+- `database/seed/` + `database/seed-demo.php` + `admin/demo-data.php` — date demo

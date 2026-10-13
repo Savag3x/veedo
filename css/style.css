@@ -558,7 +558,7 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--brand); width:
 .vh-ibtn.saved svg { fill: var(--on-accent); stroke: var(--on-accent); }
 @keyframes vh-beat { 0%{transform:scale(1)} 40%{transform:scale(1.35)} 70%{transform:scale(.88)} 100%{transform:scale(1)} }
 .vh-info { position: absolute; left: 0; right: 0; bottom: 0; z-index: 4; padding: 60px 12px 12px; background: linear-gradient(to top, rgba(4,4,8,.95) 10%, rgba(4,4,8,.6) 50%, transparent); }
-.vh-price { display: inline-flex; align-items: baseline; gap: 6px; font-family: var(--font-mono); font-weight: 600; font-size: 14px; padding: 4px 10px; border-radius: 10px; background: var(--accent); color: var(--on-accent); margin-bottom: 8px; letter-spacing: -.02em; }
+.vh-price { display: inline-flex; align-items: baseline; gap: 6px; white-space: nowrap; max-width: 100%; font-family: var(--font-mono); font-weight: 600; font-size: 14px; padding: 4px 10px; border-radius: 10px; background: var(--accent); color: var(--on-accent); margin-bottom: 8px; letter-spacing: -.02em; }
 .vh-card--feat .vh-price { font-size: 18px; }
 .vh-price .vh-neg { font-family: var(--font-main); font-size: 10px; font-weight: 600; opacity: .65; }
 .vh-title { font-size: 13px; font-weight: 500; line-height: 1.35; margin-bottom: 6px; color: #fff; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
@@ -627,6 +627,8 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--brand); width:
   .vh-card:not(.vh-card--feat) .vh-cat-badge { display: none; }
   .vh-card:not(.vh-card--feat) .vh-video-badge { top: 10px; }
   .vh-card:not(.vh-card--feat) .vh-meta { display: none; }
+  .vh-card:not(.vh-card--feat) .vh-price { font-size: 13px; padding: 3px 8px; }
+  .vh-card:not(.vh-card--feat) .vh-price .vh-neg { display: none; }
   .vh-card:not(.vh-card--feat) .vh-ibtn { width: 32px; height: 32px; border-radius: 10px; }
   .vh-card:not(.vh-card--feat) .vh-seller .vh-sep, .vh-card:not(.vh-card--feat) .vh-seller > span:last-child { display: none; }
   .items-grid { grid-template-columns: 1fr 1fr; gap: 10px; }

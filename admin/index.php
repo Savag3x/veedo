@@ -805,6 +805,7 @@ include __DIR__ . '/../includes/header.php';
     <div class="admin-nav-section">Configurare</div>
     <a href="/admin?s=settings" class="admin-nav-item <?= $section==='settings'?'active':'' ?>">⚙️ Setări</a>
     <a href="/admin/curatare-uploads.php" class="admin-nav-item">🧹 Curățare uploads</a>
+    <a href="/admin/demo-data.php" class="admin-nav-item">🧪 Date demo</a>
     <a href="/admin?s=log" class="admin-nav-item <?= $section==='log'?'active':'' ?>">🕐 Jurnal</a>
     <div style="padding:16px 20px;margin-top:auto;border-top:1px solid var(--border);margin-top:20px;">
       <a href="/" target="_blank" class="btn btn-secondary btn-sm" style="width:100%;justify-content:center;">👁 Vezi site</a>
