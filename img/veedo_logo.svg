@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="220" height="50" viewBox="0 0 220 50">
+  <circle cx="25" cy="25" r="20" fill="none" stroke="#E8380D" stroke-width="2.5"/>
+  <polygon points="19,16 19,34 33,25" fill="#E8380D"/>
+  <text x="54" y="35" font-family="Poppins,Arial Black,sans-serif" font-weight="800" font-size="30" fill="#111111" letter-spacing="-1">veedo</text>
+</svg>

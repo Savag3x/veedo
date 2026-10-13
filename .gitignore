@@ -1,0 +1,33 @@
+# Securitate - NICIODATĂ în git!
+.env
+*.env
+config.local.php
+
+# Uploaduri utilizatori
+uploads/videos/
+uploads/photos/
+uploads/avatars/
+uploads/thumbs/
+uploads/stories/
+
+# Logs
+*.log
+error_log
+
+# Cache & temp
+/tmp/
+*.tmp
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# SQL dumps (nu le comitem cu date reale)
+*.sql
+!sql_patch_security.sql
+!database/*.sql

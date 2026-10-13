@@ -1,0 +1,15 @@
+# Permite accesul la fisierele media din stories
+Options -ExecCGI -Indexes
+
+<FilesMatch "\.php$">
+  Order allow,deny
+  Deny from all
+</FilesMatch>
+
+<FilesMatch "\.(jpg|jpeg|png|webp|gif|mp4|webm|mov)$">
+  Order deny,allow
+  Allow from all
+</FilesMatch>
+
+RemoveHandler .php .php3 .php4 .php5 .php7 .php8 .phtml .phar
+RemoveType application/x-httpd-php .php .php3 .php4 .php5 .php7 .php8 .phtml

@@ -1,0 +1,19 @@
+# Blochează execuția oricărui script în folderul uploads
+# CRITIC: Previne execuția fișierelor PHP uploadate malițios
+
+# Dezactivează PHP în acest folder
+<FilesMatch "\.php$">
+  Order allow,deny
+  Deny from all
+</FilesMatch>
+
+# Permite doar imagini, video și documente
+<FilesMatch "\.(jpg|jpeg|png|webp|gif|mp4|webm|mov|ogv|pdf|svg)$">
+  Order deny,allow
+  Allow from all
+</FilesMatch>
+
+# Dezactivează interpretarea CGI/SSI
+Options -ExecCGI -Indexes
+RemoveHandler .php .php3 .php4 .php5 .php7 .php8 .phtml .phar
+RemoveType application/x-httpd-php .php .php3 .php4 .php5 .php7 .php8 .phtml

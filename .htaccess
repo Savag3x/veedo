@@ -1,0 +1,168 @@
+Options -Indexes
+ServerSignature Off
+
+# ============================================
+# VEEDO.RO - LiteSpeed / DirectAdmin Config
+# ============================================
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /
+
+  # ---- Skip real files and directories ----
+  RewriteCond %{REQUEST_FILENAME} -f [OR]
+  RewriteCond %{REQUEST_FILENAME} -d
+  RewriteRule ^ - [L]
+
+  # ---- Homepage ----
+  RewriteRule ^$ index.php [L,QSA]
+
+  # ---- Anunt individual ----
+  RewriteRule ^anunt/nou/?$ anunt-nou.php [L,QSA]
+  RewriteRule ^anunt/([a-z0-9-]+)/editeaza/?$ anunt-editeaza.php?slug=$1 [L,QSA]
+  RewriteRule ^anunt/([a-z0-9-]+)/?$ anunt.php?slug=$1 [L,QSA]
+
+  # ---- Categorie ----
+  RewriteRule ^categorie/([a-z0-9-]+)/?$ index.php?categorie=$1 [L,QSA]
+
+  # ---- Cautare ----
+  RewriteRule ^cauta/?$ cauta.php [L,QSA]
+
+  # ---- Anunturi listing ----
+  RewriteRule ^anunturi/?$ index.php [L,QSA]
+
+  # ---- Utilizator ----
+  RewriteRule ^utilizator/([0-9]+)/?$ utilizator.php?id=$1 [L,QSA]
+  RewriteRule ^utilizator/([0-9]+)/([a-z0-9-]+)/?$ utilizator.php?id=$1&tab=$2 [L,QSA]
+
+  # ---- Autentificare ----
+  RewriteRule ^login/?$ login.php [L,QSA]
+  RewriteRule ^register/?$ register.php [L,QSA]
+  RewriteRule ^logout/?$ logout.php [L,QSA]
+  RewriteRule ^recover/?$ recover.php [L,QSA]
+  RewriteRule ^reset/([a-z0-9]+)/?$ reset.php?token=$1 [L,QSA]
+  RewriteRule ^verifica/([a-z0-9]+)/?$ verifica.php?token=$1 [L,QSA]
+
+  # ---- Cont personal ----
+  RewriteRule ^cont/dashboard/?$ cont/dashboard.php [L,QSA]
+  RewriteRule ^cont/favorite/?$ cont/favorite.php [L,QSA]
+  RewriteRule ^cont/?$ cont/index.php [L,QSA]
+  RewriteRule ^cont/([a-z0-9-]+)/?$ cont/$1.php [L,QSA]
+
+  # ---- Mesaje ----
+  RewriteRule ^mesaje/([0-9]+)/?$ mesaje.php?conv_id=$1 [L,QSA]
+  RewriteRule ^mesaje/?$ mesaje.php [L,QSA]
+
+  # ---- Notificari ----
+  RewriteRule ^notificari/?$ notificari.php [L,QSA]
+
+  # ---- Pagini statice ----
+  RewriteRule ^pagina/([a-z0-9-]+)/?$ pagina.php?slug=$1 [L,QSA]
+
+  # ---- Explore ----
+  RewriteRule ^explore/?$ explore.php [L,QSA]
+
+  # ---- Stories ----
+  RewriteRule ^stories/?$ stories.php [L,QSA]
+  RewriteRule ^stories/([0-9]+)/?$ stories.php?id=$1 [L,QSA]
+
+  # ---- LIVE Shopping ----
+  RewriteRule ^live/?$ live.php [L,QSA]
+  RewriteRule ^live/([0-9]+)/?$ live.php?id=$1 [L,QSA]
+  RewriteRule ^live/start/?$ live-start.php [L,QSA]
+
+  # ---- Feed personalizat ----
+  RewriteRule ^feed/?$ feed.php [L,QSA]
+
+  # ---- Alerte cautare ----
+  RewriteRule ^alerte/?$ alerte.php [L,QSA]
+
+  # ---- Afiliere ----
+  RewriteRule ^afiliere/?$ afiliere.php [L,QSA]
+
+  # ---- Contact ----
+  RewriteRule ^contact/?$ contact.php [L,QSA]
+
+  # ---- Boost ----
+  RewriteRule ^boost/([0-9]+)/?$ boost.php?id=$1 [L,QSA]
+
+  # ---- Admin ----
+  RewriteRule ^admin/?$ admin/index.php [L,QSA]
+  RewriteRule ^alerte/?$ alerte.php [L,QSA]
+  RewriteRule ^admin/([a-z0-9-]+)/?$ admin/index.php?s=$1 [L,QSA]
+
+  # ---- API ----
+  RewriteRule ^api/([a-z0-9-]+)/?$ api/$1.php [L,QSA]
+
+  # ---- SEO ----
+  RewriteRule ^sitemap\.xml$ sitemap.php [L]
+  RewriteRule ^robots\.txt$ robots.php [L]
+
+  # ---- Blochează scanere malițioase ----
+  RewriteCond %{HTTP_USER_AGENT} (sqlmap|nikto|nmap|masscan|zgrab|acunetix) [NC]
+  RewriteRule .* - [F,L]
+
+  # ---- Blochează accesul direct la includes ----
+  RewriteRule ^includes/.*$ - [F,L]
+
+</IfModule>
+
+# ============================================
+# Custom error pages
+# ============================================
+ErrorDocument 404 /404.php
+ErrorDocument 403 /404.php
+ErrorDocument 500 /404.php
+
+# ============================================
+# Blochează fișiere sensibile
+# ============================================
+<FilesMatch "(\.env|\.env\.example|\.git|\.gitignore|composer\.lock|package-lock\.json|\.htpasswd|.*\.sql)$">
+  Order allow,deny
+  Deny from all
+</FilesMatch>
+
+# ============================================
+# Security Headers - compatibile LiteSpeed
+# LiteSpeed suportă mod_headers nativ
+# ============================================
+<IfModule mod_headers.c>
+  Header always set X-Frame-Options "SAMEORIGIN"
+  Header always set X-Content-Type-Options "nosniff"
+  Header always set X-XSS-Protection "1; mode=block"
+  Header always set Referrer-Policy "strict-origin-when-cross-origin"
+  Header always set Permissions-Policy "geolocation=(), microphone=(), camera=()"
+  Header unset X-Powered-By
+  Header always unset X-Powered-By
+</IfModule>
+
+# ============================================
+# Caching - LiteSpeed are propriul cache
+# Folosim ExpiresActive pentru fallback
+# ============================================
+<IfModule mod_expires.c>
+  ExpiresActive On
+  ExpiresByType text/css                  "access plus 1 year"
+  ExpiresByType application/javascript    "access plus 1 year"
+  ExpiresByType image/jpeg                "access plus 6 months"
+  ExpiresByType image/png                 "access plus 6 months"
+  ExpiresByType image/webp                "access plus 6 months"
+  ExpiresByType image/svg+xml             "access plus 6 months"
+  ExpiresByType video/mp4                 "access plus 1 month"
+  ExpiresByType font/woff2                "access plus 1 year"
+  ExpiresByType text/html                 "access plus 0 seconds"
+</IfModule>
+
+# ============================================
+# LiteSpeed Cache (dacă e activat pe server)
+# ============================================
+<IfModule LiteSpeed>
+  CacheLookup on
+</IfModule>
+
+# ============================================
+# PHP limits via php.ini local (nu php_value!)
+# Pe LiteSpeed/PHP-FPM: php_value dă 500 error
+# Setările sunt în php.ini din rădăcina site-ului
+# ============================================
+
