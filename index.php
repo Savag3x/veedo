@@ -74,35 +74,32 @@ $hero_chips        = array_filter(array_map('trim', explode(',', $hero_chips_raw
 $hero_show_stats   = setting_bool('hero_show_stats');
 
 // Statistici live pentru hero (social proof) — pulled doar dacă afișarea e activă
-$hero_stats = ['ads'=>0,'users'=>0,'cities'=>0];
-if ($hero_show_stats) {
+// Statistici pentru tile-urile bento (cache 5 min)
+$hero_stats = cache_remember('home_stats', 300, function () {
     try {
-        $hero_stats['ads']    = (int)(DB::fetch("SELECT COUNT(*) c FROM ads WHERE status='active'")['c'] ?? 0);
-        $hero_stats['users']  = (int)(DB::fetch("SELECT COUNT(*) c FROM users WHERE is_active=1")['c'] ?? 0);
-        $hero_stats['cities'] = (int)(DB::fetch("SELECT COUNT(DISTINCT city) c FROM ads WHERE status='active' AND city IS NOT NULL AND city<>''")['c'] ?? 0);
-    } catch (Exception $e) {}
+        return [
+            'ads'    => (int)(DB::fetch("SELECT COUNT(*) c FROM ads WHERE status='active'")['c'] ?? 0),
+            'video'  => (int)(DB::fetch("SELECT COUNT(*) c FROM ads WHERE status='active' AND video_path IS NOT NULL")['c'] ?? 0),
+            'users'  => (int)(DB::fetch("SELECT COUNT(*) c FROM users WHERE is_active=1")['c'] ?? 0),
+            'cities' => (int)(DB::fetch("SELECT COUNT(DISTINCT city) c FROM ads WHERE status='active' AND city IS NOT NULL AND city<>''")['c'] ?? 0),
+            'today'  => (int)(DB::fetch("SELECT COUNT(*) c FROM ads WHERE status='active' AND created_at >= CURDATE()")['c'] ?? 0),
+        ];
+    } catch (Exception $e) { return ['ads'=>0,'video'=>0,'users'=>0,'cities'=>0,'today'=>0]; }
+});
+
+// Anunț video recomandat pentru tile-ul „Acum pe Veedo" (rulează automat, fără sunet)
+$hero_video = null;
+$live_now   = 0;
+if (!$active_cat && $pagination['page'] === 1) {
+    $hero_video = DB::fetch("
+        SELECT a.title, a.slug, a.price, a.currency, a.video_path, a.video_thumb, a.city, c.name AS cat_name
+        FROM ads a JOIN categories c ON c.id=a.category_id
+        WHERE a.status='active' AND a.video_path IS NOT NULL
+        ORDER BY a.is_boosted DESC, a.views_count DESC LIMIT 1");
+    try { $live_now = (int)(DB::fetch("SELECT COUNT(*) c FROM live_streams WHERE status='live'")['c'] ?? 0); } catch (Exception $e) {}
 }
 
-// 3 anunțuri pentru cards-urile float din hero — random din top 30 (boostate + cele mai vizionate)
-// Asta dă varietate la fiecare reload, dar prioritizează anunțurile populare/promovate
-$hero_card_ads = [];
-if (!$active_cat && $pagination['page'] === 1) try {
-    $hero_card_ads = DB::fetchAll("
-        SELECT * FROM (
-            SELECT a.id, a.title, a.slug, a.price, a.currency,
-                   c.name AS cat_name,
-                   a.video_thumb,
-                   (SELECT path FROM ad_photos WHERE ad_id=a.id ORDER BY id ASC LIMIT 1) AS first_photo
-            FROM ads a
-            JOIN categories c ON c.id=a.category_id
-            WHERE a.status='active'
-            ORDER BY a.is_boosted DESC, a.views_count DESC
-            LIMIT 30
-        ) pool
-        ORDER BY RAND()
-        LIMIT 3
-    ");
-} catch (Exception $e) {}
+
 function hero_num($n){
     if ($n >= 1000) { $v = $n/1000; return rtrim(rtrim(number_format($v,1,'.',''),'0'),'.').'K'; }
     return (string)$n;
@@ -120,128 +117,99 @@ include __DIR__ . '/includes/header.php';
 ?>
 
 <style>
-/* ── Hero 2026 ───────────────────────────────────────────── */
-.hero3{position:relative;max-width:1240px;margin:20px auto 8px;padding:0 24px}
-.hero3-card{position:relative;overflow:hidden;border-radius:32px;
-  background:
-    radial-gradient(60% 80% at 100% 0%, rgba(255,138,0,.20), transparent 60%),
-    radial-gradient(50% 70% at 0% 100%, rgba(124,92,255,.14), transparent 60%),
-    var(--surface);
-  border:1px solid var(--border-2);box-shadow:var(--shadow);
-  display:grid;grid-template-columns:1.1fr .9fr;gap:24px;align-items:center;
-  padding:56px 56px 56px 60px;min-height:460px}
-.hero3-card::after{content:"";position:absolute;inset:0;pointer-events:none;
-  background-image:radial-gradient(rgba(17,16,22,.07) 1px, transparent 1px);background-size:22px 22px;
-  mask-image:linear-gradient(90deg,transparent 40%,#000 100%);-webkit-mask-image:linear-gradient(90deg,transparent 40%,#000 100%)}
-[data-theme="dark"] .hero3-card::after{background-image:radial-gradient(rgba(255,255,255,.06) 1px, transparent 1px)}
-.hero3-left{position:relative;z-index:2}
-.hero3-eyebrow{display:inline-flex;align-items:center;gap:8px;padding:6px 14px 6px 8px;border-radius:999px;
-  background:var(--surface-2);border:1px solid var(--border);font-size:12.5px;font-weight:700;color:var(--text-2);margin-bottom:22px}
-.hero3-eyebrow b{background:var(--grad-ember);color:#fff;border-radius:999px;padding:2px 9px;font-size:11px;letter-spacing:.4px}
-.hero3-title{font-size:clamp(2.4rem,4.6vw,3.9rem);font-weight:800;letter-spacing:-.045em;line-height:1.02;margin-bottom:18px}
-.hero3-title .hl{background:var(--grad-text);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
-.hero3-sub{font-size:1.06rem;color:var(--text-2);max-width:500px;margin-bottom:28px;line-height:1.6}
-.hero3-form{display:flex;align-items:center;gap:6px;max-width:560px;padding:6px;border-radius:20px;
-  background:var(--surface);border:1px solid var(--border);box-shadow:var(--shadow-md)}
-.hero3-form:focus-within{border-color:var(--brand);box-shadow:var(--brand-glow),var(--shadow-md)}
-.hero3-form .ico{padding-left:12px;color:var(--text-3);display:flex}
-.hero3-form input{flex:1;min-width:0;border:0;outline:0;background:none;height:48px;font-size:15.5px;color:var(--text)}
-.hero3-form input::placeholder{color:var(--text-3)}
-.hero3-form select{border:0;outline:0;background:var(--surface-2);height:48px;border-radius:14px;padding:0 12px;font-size:13.5px;font-weight:600;color:var(--text-2);max-width:170px;cursor:pointer}
-.hero3-form button{height:48px;padding:0 24px;border:0;border-radius:14px;background:var(--grad-ember);color:#fff;font-weight:800;font-size:15px;cursor:pointer;box-shadow:var(--shadow-brand);transition:transform .2s var(--spring)}
-.hero3-form button:hover{transform:translateY(-1px)}
-.hero3-chips{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:18px}
-.hero3-chips .lbl{font-size:13px;color:var(--text-3);font-weight:600;margin-right:2px}
-.hero3-chips a{font-size:13px;font-weight:600;color:var(--text-2);padding:6px 13px;border-radius:999px;border:1px solid var(--border);background:var(--surface);transition:all .2s}
-.hero3-chips a:hover{color:var(--brand);border-color:var(--border-brand)}
-.hero3-stats{display:flex;gap:28px;margin-top:30px}
-.hero3-stats b{display:block;font-family:var(--font-display);font-size:1.6rem;font-weight:800;letter-spacing:-.03em}
-.hero3-stats span{font-size:12.5px;color:var(--text-3);font-weight:600}
+/* ── Bento hero 2027 ─────────────────────────────────────── */
+.bento{max-width:1320px;margin:22px auto 8px;padding:0 28px;display:grid;gap:14px;
+  grid-template-columns:repeat(12,1fr);grid-template-rows:auto auto}
+.bt{position:relative;overflow:hidden;border-radius:30px;background:var(--surface);border:1px solid var(--glass-border);
+  backdrop-filter:blur(22px) saturate(1.4);-webkit-backdrop-filter:blur(22px) saturate(1.4);
+  box-shadow:inset 0 1px 0 var(--glass-border),var(--shadow);padding:26px}
+.bt-main{grid-column:span 8;grid-row:span 2;padding:46px 46px 40px;display:flex;flex-direction:column;justify-content:space-between;min-height:520px}
+.bt-main::after{content:"";position:absolute;right:-120px;bottom:-160px;width:460px;height:460px;border-radius:50%;
+  background:conic-gradient(from 120deg,#7357FF,#FF4FA3,#D4FF3F,#7357FF);filter:blur(80px);opacity:.35;pointer-events:none;animation:spin 18s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.bt-eyebrow{position:relative;z-index:1;display:inline-flex;align-items:center;gap:10px;font-family:var(--font-mono);font-size:12px;font-weight:600;letter-spacing:1.4px;text-transform:uppercase;color:var(--text-2)}
+.bt-eyebrow i{width:8px;height:8px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 4px rgba(212,255,63,.2)}
+.bt-title{position:relative;z-index:1;font-size:clamp(2.6rem,5.6vw,5.4rem);font-weight:800;line-height:.95;letter-spacing:-.05em;margin:26px 0 22px}
+.bt-sub{position:relative;z-index:1;font-size:1.05rem;color:var(--text-2);max-width:520px;margin-bottom:30px}
+.bt-search{position:relative;z-index:1;display:flex;align-items:center;gap:8px;max-width:640px;padding:7px;border-radius:22px;
+  background:var(--surface-solid);border:1px solid var(--glass-border);box-shadow:var(--shadow-md)}
+.bt-search:focus-within{border-color:var(--brand);box-shadow:var(--brand-glow),var(--shadow-md)}
+.bt-search .ico{padding-left:12px;color:var(--text-3);display:flex}
+.bt-search input{flex:1;min-width:0;border:0;outline:0;background:none;height:50px;font-size:16px;color:var(--text)}
+.bt-search input::placeholder{color:var(--text-3)}
+.bt-search select{border:0;outline:0;background:var(--glass);height:50px;border-radius:15px;padding:0 12px;font-size:13.5px;color:var(--text-2);max-width:170px;cursor:pointer}
+.bt-search button{height:50px;padding:0 26px;border:0;border-radius:15px;background:var(--accent);color:var(--on-accent);font-weight:700;font-size:15px;cursor:pointer;transition:transform .2s var(--spring)}
+.bt-search button:hover{transform:translateY(-1px) scale(1.02)}
+.bt-chips{position:relative;z-index:1;display:flex;flex-wrap:wrap;gap:8px;margin-top:18px}
+.bt-chips a{font-size:13px;color:var(--text-2);padding:7px 14px;border-radius:999px;border:1px solid var(--glass-border);background:var(--glass);transition:all .2s}
+.bt-chips a:hover{color:var(--text);border-color:var(--glass-hi)}
 
-/* Colaj video */
-.hero3-right{position:relative;z-index:2;height:400px}
-.v3{position:absolute;display:block;border-radius:26px;overflow:hidden;background:#141418 center/cover no-repeat;
-  box-shadow:0 30px 60px -24px rgba(17,16,22,.55);border:4px solid var(--surface);color:#fff;text-decoration:none;
-  transition:transform .5s var(--spring)}
-.v3:hover{color:#fff}
-.v3::before{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.05) 30%,rgba(0,0,0,.78))}
-.v3-main{width:230px;height:380px;left:50%;top:10px;transform:translateX(-50%) rotate(-2deg);z-index:3}
-.v3-a{width:170px;height:240px;left:2%;top:90px;transform:rotate(-9deg);z-index:2;opacity:.96}
-.v3-b{width:170px;height:240px;right:2%;top:40px;transform:rotate(8deg);z-index:2;opacity:.96}
-.hero3-right:hover .v3-main{transform:translateX(-50%) rotate(0) translateY(-6px)}
-.hero3-right:hover .v3-a{transform:rotate(-12deg) translateX(-8px)}
-.hero3-right:hover .v3-b{transform:rotate(11deg) translateX(8px)}
-.v3-tag{position:absolute;top:12px;left:12px;z-index:2;font-size:10.5px;font-weight:800;letter-spacing:.4px;padding:4px 10px;border-radius:999px;background:rgba(255,255,255,.18);backdrop-filter:blur(8px)}
-.v3-play{position:absolute;z-index:2;left:50%;top:44%;transform:translate(-50%,-50%);width:58px;height:58px;border-radius:50%;
-  background:rgba(255,255,255,.95);display:grid;place-items:center;box-shadow:0 10px 26px rgba(0,0,0,.35)}
-.v3-play::after{content:"";position:absolute;inset:-8px;border-radius:50%;border:2px solid rgba(255,255,255,.55);animation:v3ring 2.2s ease-out infinite}
-@keyframes v3ring{0%{transform:scale(.85);opacity:1}100%{transform:scale(1.35);opacity:0}}
-.v3-a .v3-play,.v3-b .v3-play{width:42px;height:42px}
-.v3-foot{position:absolute;left:12px;right:12px;bottom:12px;z-index:2}
-.v3-title{font-size:13px;font-weight:700;line-height:1.3;margin-bottom:6px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-.v3-price{display:inline-block;font-family:var(--font-display);font-weight:800;font-size:14px;color:#121116;background:#fff;border-radius:10px;padding:3px 10px}
-.v3-float{position:absolute;z-index:4;display:flex;align-items:center;gap:9px;padding:10px 14px;border-radius:16px;background:var(--surface);
-  border:1px solid var(--border-2);box-shadow:var(--shadow-lg);font-size:12.5px;font-weight:700;color:var(--text);white-space:nowrap;
-  animation:v3float 6s ease-in-out infinite}
-.v3-float small{display:block;font-weight:600;color:var(--text-3);font-size:11px}
-.v3-float .ic{width:32px;height:32px;border-radius:10px;display:grid;place-items:center;font-size:16px}
-.v3-f1{left:-2%;bottom:24px}
-.v3-f1 .ic{background:rgba(14,159,110,.12)}
-.v3-f2{right:-1%;top:250px;animation-delay:-3s}
-.v3-f2 .ic{background:var(--brand-light)}
-@keyframes v3float{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+.bt-video{grid-column:span 4;grid-row:span 2;padding:0;min-height:520px;background:#0C0C12;color:#fff}
+.bt-video video,.bt-video img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.bt-video .ph{position:absolute;inset:0;background:radial-gradient(60% 50% at 30% 30%,rgba(115,87,255,.6),transparent 70%),radial-gradient(60% 50% at 80% 80%,rgba(255,79,163,.45),transparent 70%),#0C0C12}
+.bt-video::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.35),transparent 30%,transparent 50%,rgba(0,0,0,.9))}
+.bt-video .top{position:absolute;z-index:2;top:18px;left:18px;right:18px;display:flex;justify-content:space-between;align-items:center}
+.bt-pill{display:inline-flex;align-items:center;gap:7px;padding:6px 12px;border-radius:999px;background:rgba(0,0,0,.45);border:1px solid rgba(255,255,255,.16);backdrop-filter:blur(10px);font-family:var(--font-mono);font-size:11px;font-weight:600;letter-spacing:.8px;text-transform:uppercase;color:#fff}
+.bt-pill i{width:7px;height:7px;border-radius:50%;background:var(--live);animation:livePulse 1.8s infinite}
+.bt-video .bot{position:absolute;z-index:2;left:20px;right:20px;bottom:20px}
+.bt-video .bot h3{color:#fff;font-size:1.25rem;line-height:1.2;margin:10px 0 12px;font-weight:600}
+.bt-video .price{display:inline-block;font-family:var(--font-mono);font-weight:600;font-size:16px;padding:5px 12px;border-radius:12px;background:var(--accent);color:var(--on-accent)}
+.bt-video a.cover{position:absolute;inset:0;z-index:3}
 
-/* Hero compact pe mobil: doar căutare */
-.hero3-mobile{display:none}
-@media(max-width:1020px){
-  .hero3-card{grid-template-columns:1fr;padding:44px 36px;min-height:0}
-  .hero3-right{display:none}
+.bt-stat{grid-column:span 3;display:flex;flex-direction:column;justify-content:space-between;min-height:190px}
+.bt-stat .k{font-family:var(--font-mono);font-size:11px;letter-spacing:1.4px;text-transform:uppercase;color:var(--text-3)}
+.bt-stat .n{font-family:var(--font-display);font-weight:800;font-size:clamp(2.4rem,4vw,3.6rem);letter-spacing:-.05em;line-height:1}
+.bt-stat .s{font-size:13px;color:var(--text-2)}
+.bt-stat .spark{position:absolute;right:20px;top:22px;display:flex;gap:4px;align-items:flex-end;height:46px}
+.bt-stat .spark span{width:7px;border-radius:4px;background:var(--brand);opacity:.85}
+.bt-stat .spark span:nth-child(odd){background:var(--accent)}
+.bt-cta{grid-column:span 3;background:var(--accent);border-color:transparent;color:var(--on-accent);display:flex;flex-direction:column;justify-content:space-between;min-height:190px;transition:transform .35s var(--spring)}
+.bt-cta:hover{transform:translateY(-4px) rotate(-.5deg);color:var(--on-accent)}
+.bt-cta h3{color:var(--on-accent);font-size:1.5rem;line-height:1.05;letter-spacing:-.03em}
+.bt-cta .arrow{width:48px;height:48px;border-radius:16px;background:var(--on-accent);color:var(--accent);display:grid;place-items:center;align-self:flex-end;transition:transform .3s var(--spring)}
+.bt-cta:hover .arrow{transform:rotate(-45deg)}
+.bt-cta small{font-family:var(--font-mono);font-size:11px;letter-spacing:1.2px;text-transform:uppercase;opacity:.7}
+.bt-live{grid-column:span 3;min-height:190px;display:flex;flex-direction:column;justify-content:space-between;color:var(--text)}
+.bt-live:hover{color:var(--text);border-color:var(--glass-hi)}
+.bt-live h3{font-size:1.15rem}
+.bt-live p{font-size:13px;color:var(--text-2)}
+.bt-trust{grid-column:span 3;min-height:190px;display:flex;flex-direction:column;justify-content:space-between}
+.bt-trust ul{list-style:none;display:grid;gap:9px;font-size:13.5px;color:var(--text-2)}
+.bt-trust li{display:flex;gap:9px;align-items:center}
+.bt-trust li b{width:22px;height:22px;border-radius:7px;background:var(--brand-light);color:var(--brand);display:grid;place-items:center;font-size:12px;flex-shrink:0}
+
+/* Mobil: hero compact */
+.hero-m{display:none}
+@media(max-width:1100px){
+  .bt-main{grid-column:span 12;grid-row:auto;min-height:0}
+  .bt-video{grid-column:span 6;min-height:360px;grid-row:auto}
+  .bt-stat,.bt-cta,.bt-live,.bt-trust{grid-column:span 6}
 }
 @media(max-width:768px){
-  .hero3{display:none}
-  .hero3-mobile{display:block;padding:16px 16px 4px}
-  .hero3-mobile h1{font-size:1.55rem;letter-spacing:-.04em;margin-bottom:12px;line-height:1.15}
-  .hero3-mobile h1 .hl{background:var(--grad-text);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
-  .hero3-mobile form{display:flex;align-items:center;gap:8px;padding:5px 5px 5px 14px;border-radius:16px;background:var(--surface);border:1px solid var(--border);box-shadow:var(--shadow-sm)}
-  .hero3-mobile input{flex:1;min-width:0;border:0;outline:0;background:none;height:42px;font-size:15px;color:var(--text)}
-  .hero3-mobile button{height:42px;width:42px;border:0;border-radius:12px;background:var(--grad-ember);color:#fff;display:grid;place-items:center}
+  .bento{display:none}
+  .hero-m{display:block;padding:18px 16px 6px}
+  .hero-m h1{font-size:2rem;line-height:1;letter-spacing:-.05em;margin-bottom:14px}
+  .hero-m .k{display:flex;align-items:center;gap:8px;font-family:var(--font-mono);font-size:11px;letter-spacing:1.3px;text-transform:uppercase;color:var(--text-3);margin-bottom:12px}
+  .hero-m .k i{width:7px;height:7px;border-radius:50%;background:var(--accent)}
+  .hero-m button.s{width:100%;display:flex;align-items:center;gap:10px;height:52px;padding:0 8px 0 16px;border-radius:18px;background:var(--surface);border:1px solid var(--glass-border);backdrop-filter:blur(16px);color:var(--text-3);font-size:15px;text-align:left}
+  .hero-m button.s span{flex:1}
+  .hero-m button.s em{font-style:normal;height:38px;width:38px;border-radius:13px;background:var(--accent);color:var(--on-accent);display:grid;place-items:center}
 }
 </style>
 
-<!-- HERO -->
-<?php if (!$active_cat && $pagination['page'] === 1): ?>
-<?php
-$hero_tagline = setting('site_tagline','Anunțuri video. Simplu. Rapid.');
-$hero_tagline = str_ireplace('video', '<span class="hl">video</span>', h($hero_tagline));
-$hero_slots = [];
-foreach (array_slice($hero_card_ads, 0, 3) as $hc) {
-    $hero_slots[] = [
-        'bg'    => !empty($hc['first_photo']) ? photo_url($hc['first_photo']) : (!empty($hc['video_thumb']) ? thumb_url($hc['video_thumb']) : ''),
-        'tag'   => mb_strtoupper($hc['cat_name']),
-        'title' => $hc['title'],
-        'price' => $hc['price'] > 0 ? format_price((float)$hc['price'], $hc['currency']) : 'Negociabil',
-        'link'  => '/anunt/' . $hc['slug'],
-    ];
-}
-$hero_fallback = [
-    ['bg'=>'','tag'=>'AUTO / MOTO','title'=>'BMW Seria 5 520d xDrive 2022','price'=>'42.500 EUR','link'=>''],
-    ['bg'=>'','tag'=>'IMOBILIARE','title'=>'Apartament 3 camere Floreasca','price'=>'125.000 EUR','link'=>''],
-    ['bg'=>'','tag'=>'ELECTRONICE','title'=>'MacBook Pro M3 · sigilat','price'=>'9.800 RON','link'=>''],
-];
-while (count($hero_slots) < 3) $hero_slots[] = $hero_fallback[count($hero_slots)];
-$v3_classes = ['v3-main', 'v3-a', 'v3-b'];
+<!-- HERO BENTO -->
+<?php if (!$active_cat && $pagination['page'] === 1):
+  $hv_thumb = $hero_video && $hero_video['video_thumb'] ? thumb_url($hero_video['video_thumb']) : '';
 ?>
-<section class="hero3" aria-label="Căutare anunțuri">
-  <div class="hero3-card">
-    <div class="hero3-left">
-      <?php if ($hero_eyebrow): ?>
-      <span class="hero3-eyebrow"><b>NOU</b> <?= h($hero_eyebrow) ?></span>
-      <?php endif; ?>
-      <h1 class="hero3-title"><?= $hero_tagline ?></h1>
-      <?php if ($hero_subtitle): ?>
-      <p class="hero3-sub"><?= nl2br(h($hero_subtitle)) ?></p>
-      <?php endif; ?>
-      <form action="/cauta" method="GET" class="hero3-form" role="search">
+<section class="bento" aria-label="Veedo">
+  <div class="bt bt-main vh-reveal">
+    <div>
+      <span class="bt-eyebrow"><i></i><?= h($hero_eyebrow ?: 'Marketplace video') ?> · <?= hero_num($hero_stats['ads']) ?> anunțuri live</span>
+      <h1 class="bt-title">Vezi <span class="hl">înainte</span><br>să cumperi.</h1>
+      <?php if ($hero_subtitle): ?><p class="bt-sub"><?= h($hero_subtitle) ?></p><?php endif; ?>
+    </div>
+    <div>
+      <form action="/cauta" method="GET" class="bt-search" role="search">
         <span class="ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg></span>
         <input type="search" name="q" placeholder="<?= h($hero_search_ph) ?>" autocomplete="off" aria-label="Ce cauți?">
         <select name="cat" aria-label="Categorie">
@@ -251,47 +219,62 @@ $v3_classes = ['v3-main', 'v3-a', 'v3-b'];
         <button type="submit">Caută</button>
       </form>
       <?php if ($hero_chips): ?>
-      <div class="hero3-chips">
-        <?php if ($hero_chips_label): ?><span class="lbl"><?= h($hero_chips_label) ?></span><?php endif; ?>
-        <?php foreach ($hero_chips as $chip): ?>
-          <a href="/cauta?q=<?= urlencode($chip) ?>"><?= h($chip) ?></a>
-        <?php endforeach; ?>
-      </div>
-      <?php endif; ?>
-      <?php if ($hero_show_stats): ?>
-      <div class="hero3-stats">
-        <div><b><?= hero_num($hero_stats['ads']) ?>+</b><span>anunțuri active</span></div>
-        <div><b><?= hero_num($hero_stats['users']) ?>+</b><span>vânzători</span></div>
-        <div><b><?= hero_num($hero_stats['cities']) ?></b><span>orașe</span></div>
+      <div class="bt-chips">
+        <?php foreach ($hero_chips as $chip): ?><a href="/cauta?q=<?= urlencode($chip) ?>"><?= h($chip) ?></a><?php endforeach; ?>
       </div>
       <?php endif; ?>
     </div>
+  </div>
 
-    <div class="hero3-right" aria-hidden="true">
-      <?php foreach ($hero_slots as $i => $sl):
-          $tagOpen = $sl['link'] ? '<a href="' . h($sl['link']) . '" tabindex="-1"' : '<div';
-          $tagClose = $sl['link'] ? '</a>' : '</div>';
-          $bgStyle = $sl['bg'] ? ' style="background-image:url(\'' . h($sl['bg']) . '\')"' : ' style="background-image:linear-gradient(160deg,#2A2830,#121116)"';
-      ?>
-        <?= $tagOpen ?> class="v3 <?= $v3_classes[$i] ?>"<?= $bgStyle ?>>
-          <span class="v3-tag"><?= h($sl['tag']) ?></span>
-          <span class="v3-play"><svg width="18" height="18" viewBox="0 0 24 24" fill="#FF4A1C"><path d="M7 4v16l13-8z"/></svg></span>
-          <span class="v3-foot"><span class="v3-title"><?= h($sl['title']) ?></span><span class="v3-price"><?= h($sl['price']) ?></span></span>
-        <?= $tagClose ?>
-      <?php endforeach; ?>
-      <div class="v3-float v3-f1"><span class="ic">💬</span><span>Mesaj nou<small>„Mai este disponibil?”</small></span></div>
-      <div class="v3-float v3-f2"><span class="ic">🎬</span><span>+3× vizualizări<small>pentru anunțurile video</small></span></div>
+  <div class="bt bt-video vh-reveal">
+    <?php if ($hero_video): ?>
+      <video src="<?= h(BASE_URL . '/uploads/videos/' . rawurlencode(basename($hero_video['video_path']))) ?>" <?= $hv_thumb ? 'poster="' . h($hv_thumb) . '"' : '' ?> autoplay muted loop playsinline preload="metadata"></video>
+    <?php else: ?>
+      <div class="ph"></div>
+    <?php endif; ?>
+    <div class="top"><span class="bt-pill"><i></i>Acum pe Veedo</span><?php if ($hero_video): ?><span class="bt-pill"><?= h($hero_video['cat_name']) ?></span><?php endif; ?></div>
+    <div class="bot">
+      <?php if ($hero_video): ?>
+        <h3><?= h(mb_substr($hero_video['title'], 0, 70)) ?></h3>
+        <span class="price"><?= $hero_video['price'] > 0 ? h(format_price((float)$hero_video['price'], $hero_video['currency'])) : 'Preț la cerere' ?></span>
+      <?php else: ?>
+        <h3>Primul anunț video poate fi al tău.</h3>
+      <?php endif; ?>
     </div>
+    <a class="cover" href="<?= $hero_video ? '/anunt/' . h($hero_video['slug']) : '/anunt/nou' ?>" aria-label="Deschide anunțul"></a>
+  </div>
+
+  <div class="bt bt-stat vh-reveal">
+    <span class="k">Anunțuri video</span>
+    <div class="spark" aria-hidden="true"><span style="height:30%"></span><span style="height:55%"></span><span style="height:40%"></span><span style="height:75%"></span><span style="height:60%"></span><span style="height:100%"></span></div>
+    <div><div class="n"><?= hero_num($hero_stats['video']) ?></div><div class="s">din <?= hero_num($hero_stats['ads']) ?> anunțuri active · <?= (int)$hero_stats['cities'] ?> orașe</div></div>
+  </div>
+
+  <a href="/anunt/nou" class="bt bt-cta vh-reveal">
+    <small>Gratuit · 60 secunde</small>
+    <h3>Filmează.<br>Postează.<br>Vinde.</h3>
+    <span class="arrow"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
+  </a>
+
+  <a href="<?= setting_bool('feature_live') ? '/live' : '/explore' ?>" class="bt bt-live vh-reveal">
+    <span class="bt-pill" style="align-self:flex-start;background:var(--glass);color:var(--text);border-color:var(--glass-border)"><i></i><?= $live_now > 0 ? $live_now . ' live acum' : 'Live shopping' ?></span>
+    <div><h3>Cumpără în direct de la vânzători</h3><p>Întreabă, vezi produsul, negociază — în timp real.</p></div>
+  </a>
+
+  <div class="bt bt-trust vh-reveal">
+    <span class="k" style="font-family:var(--font-mono);font-size:11px;letter-spacing:1.4px;text-transform:uppercase;color:var(--text-3)">De ce Veedo</span>
+    <ul>
+      <li><b>▶</b> Vezi produsul real, nu doar poze</li>
+      <li><b>✓</b> Vânzători business verificați</li>
+      <li><b>⚡</b> Chat instant, fără intermediari</li>
+    </ul>
   </div>
 </section>
 
-<div class="hero3-mobile">
-  <h1><?= $hero_tagline ?></h1>
-  <form action="/cauta" method="GET" role="search">
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" style="color:var(--text-3)"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
-    <input type="search" name="q" placeholder="<?= h($hero_search_ph) ?>" autocomplete="off" aria-label="Ce cauți?">
-    <button type="submit" aria-label="Caută"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
-  </form>
+<div class="hero-m">
+  <div class="k"><i></i><?= hero_num($hero_stats['ads']) ?> anunțuri live</div>
+  <h1>Vezi <span class="hl">înainte</span> să cumperi.</h1>
+  <button type="button" class="s" data-cmdk-open><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg><span><?= h($hero_search_ph) ?></span><em><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></em></button>
 </div>
 <?php endif; ?>
 
@@ -373,11 +356,11 @@ $v3_classes = ['v3-main', 'v3-a', 'v3-b'];
 
 <!-- Section label + sort -->
 <div class="vh-sec vh-reveal">
-  <h2>
+  <h2><span class="vh-kicker"><?= $active_cat ? 'Categorie' : 'Feed · actualizat live' ?></span>
     <?php if ($active_cat): ?>
       <?= h($cat_map_icon[$active_cat] ?? '') ?> <?= h($cat_map_name[$active_cat] ?? 'Anunțuri') ?>
     <?php else: ?>
-      Anunțuri recente
+      Proaspăt postate
     <?php endif; ?>
   </h2>
   <span class="vh-line"></span>

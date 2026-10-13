@@ -59,3 +59,10 @@ ALTER TABLE `ads`        DROP INDEX `idx_status`;
 -- ---------- 4. Setări noi ----------
 INSERT IGNORE INTO `settings` (`setting_key`, `setting_value`, `setting_group`, `label`, `type`)
 VALUES ('smtp_insecure', '0', 'email', 'SMTP: acceptă certificat self-signed (nerecomandat)', 'boolean');
+
+-- ---------- 5. Design 2027 ----------
+-- Tema implicită devine „dark", iar culorile din Admin → Aspect corespund noii palete
+-- (principală = accent volt, secundară = violet). Le poți schimba oricând din Admin.
+UPDATE `settings` SET `setting_value`='dark'    WHERE `setting_key`='site_theme_default';
+UPDATE `settings` SET `setting_value`='#D4FF3F' WHERE `setting_key`='site_color_primary';
+UPDATE `settings` SET `setting_value`='#9B86FF' WHERE `setting_key`='site_color_secondary';

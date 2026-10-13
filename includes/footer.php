@@ -12,10 +12,10 @@ $yr = date('Y');
   <?php if (!is_logged() || !str_starts_with(strtok($_SERVER['REQUEST_URI'] ?? '/', '?'), '/anunt/nou')): ?>
   <div class="footer-cta">
     <div>
-      <h3>Ai ceva de vândut? Arată-l într-un video.</h3>
+      <h3>Filmează. Postează. Vinde.<br>Totul în mai puțin de un minut.</h3>
       <p>Anunțurile cu video primesc mai multe vizualizări și mesaje. Postarea e gratuită.</p>
     </div>
-    <a href="/anunt/nou" class="btn btn-primary btn-lg btn-pill">Adaugă anunț gratuit</a>
+    <a href="/anunt/nou" class="btn btn-primary btn-lg btn-pill">Adaugă anunț gratuit →</a>
   </div>
   <?php endif; ?>
 
@@ -26,7 +26,7 @@ $yr = date('Y');
         <?php if ($logo): ?>
           <img src="<?= h($logo) ?>" alt="<?= h(setting('site_name','Veedo')) ?>" style="height:32px;width:auto;max-width:160px;object-fit:contain;" loading="lazy">
         <?php else: ?>
-          <svg viewBox="0 0 120 120" width="30" height="30" aria-hidden="true"><rect x="4" y="4" width="112" height="112" rx="34" fill="#FF4A1C"/><path d="M38 40 L60 82 L82 40" fill="none" stroke="#fff" stroke-width="15" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <svg viewBox="0 0 120 120" width="32" height="32" aria-hidden="true"><defs><linearGradient id="vdvf" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7357FF"/><stop offset="1" stop-color="#FF4FA3"/></linearGradient></defs><rect x="2" y="2" width="116" height="116" rx="38" fill="url(#vdvf)"/><path d="M36 38 L60 84 L84 38" fill="none" stroke="#D4FF3F" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/></svg>
           veedo
         <?php endif; ?>
       </div>
@@ -72,10 +72,12 @@ $yr = date('Y');
         <li><a href="/contact">Contact</a></li>
         <?php if(setting_bool("feature_afiliere")): ?><li><a href="/afiliere">Program afiliere</a></li><?php endif; ?>
         <?php if(setting_bool("feature_alerte")): ?><li><a href="/alerte">Alerte căutare</a></li><?php endif; ?>
-        <li><button type="button" class="theme-toggle" style="background:none;border:0;color:#D6D4DD;font-size:14.5px;cursor:pointer;padding:0">◐ <span class="theme-label">Temă întunecată</span></button></li>
+        <li><button type="button" class="theme-toggle">◐ <span class="theme-label">Temă luminoasă</span></button></li>
       </ul>
     </div>
   </div>
+
+  <div class="footer-wordmark" aria-hidden="true">veedo</div>
 
   <div class="footer-bottom">
     <span><?= h(setting('footer_text', "© $yr Veedo.ro - Toate drepturile rezervate")) ?></span>

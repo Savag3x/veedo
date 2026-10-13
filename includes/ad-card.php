@@ -32,8 +32,9 @@ $_classes = 'vh-card vh-reveal'
     . ($card_spotlight ? ' vh-card--feat' : '')
     . (is_boosted($ad) ? ' vh-card--boosted' : '');
 $_catColor = safe_color($ad['cat_color'] ?? '', '#55535E');
+$_videoUrl = !empty($ad['video_path']) ? BASE_URL . '/uploads/videos/' . rawurlencode(basename($ad['video_path'])) : '';
 ?>
-<a href="/anunt/<?= h($ad['slug']) ?>" class="<?= $_classes ?>">
+<a href="/anunt/<?= h($ad['slug']) ?>" class="<?= $_classes ?>"<?= $_videoUrl ? ' data-video="' . h($_videoUrl) . '"' : '' ?>>
   <div class="vh-scene">
     <?php if ($_img): ?>
       <img src="<?= h($_img) ?>" alt="<?= h($ad['title']) ?>" width="400" height="400"
@@ -41,6 +42,9 @@ $_catColor = safe_color($ad['cat_color'] ?? '', '#55535E');
            onerror="this.onerror=null;this.style.display='none';this.parentNode.insertAdjacentHTML('beforeend','<div class=&quot;vh-ph&quot;><?= h($ad['cat_icon'] ?? '📦') ?></div>');">
     <?php else: ?>
       <div class="vh-ph"><?= h($ad['cat_icon'] ?? '📦') ?></div>
+    <?php endif; ?>
+    <?php if ($_videoUrl): ?>
+      <span class="vh-play-hint" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="#fff"><path d="M7 4v16l13-8z"/></svg></span>
     <?php endif; ?>
     <?php if ($_hasVideo): ?>
       <span class="vh-video-badge"><i><svg width="9" height="9" viewBox="0 0 24 24" fill="#fff"><path d="M7 4v16l13-8z"/></svg></i><?= $_dur > 0 ? format_duration($_dur) : 'Video' ?></span>
@@ -64,8 +68,8 @@ $_catColor = safe_color($ad['cat_color'] ?? '', '#55535E');
   </div>
 
   <div class="vh-info">
+    <div class="vh-price"><?= $_priceTxt ?><?php if ((float)$ad['price'] > 0 && !empty($ad['price_negotiable'])): ?> <span class="vh-neg">negociabil</span><?php endif; ?></div>
     <div class="vh-title"><?= h($ad['title']) ?></div>
-    <div class="vh-price"><?= $_priceTxt ?><?php if ((float)$ad['price'] > 0 && !empty($ad['price_negotiable'])): ?> <span class="vh-neg">· negociabil</span><?php endif; ?></div>
     <div class="vh-meta">
       <?php if (!empty($ad['city'])): ?><span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg><?= h($ad['city']) ?></span><?php endif; ?>
       <span><?= h(time_ago($ad['bumped_at'] ?? null ?: $ad['created_at'])) ?></span>
@@ -74,7 +78,7 @@ $_catColor = safe_color($ad['cat_color'] ?? '', '#55535E');
       <img src="<?= h(avatar_url($ad['user_avatar'] ?? null, $ad['user_name'] ?? '')) ?>" alt="" width="22" height="22" loading="lazy" decoding="async">
       <span><?= h(mb_substr($ad['user_name'] ?? '', 0, 22)) ?></span>
       <?php if (!empty($ad['is_verified_business'])): ?>
-        <svg class="vh-verified" viewBox="0 0 24 24" fill="none" aria-label="Business verificat"><circle cx="12" cy="12" r="11" fill="#4F46E5"/><path d="M7 12.5l3.2 3.2L17 9" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <svg class="vh-verified" viewBox="0 0 24 24" fill="none" aria-label="Business verificat"><circle cx="12" cy="12" r="11" fill="#9B86FF"/><path d="M7 12.5l3.2 3.2L17 9" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
       <?php endif; ?>
       <span class="vh-sep" style="margin-left:auto"></span>
       <span>👁 <?= number_format((int)($ad['views_count'] ?? 0), 0, ',', '.') ?></span>

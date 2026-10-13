@@ -11,14 +11,18 @@ if ($ga_id && !preg_match('/^[A-Z0-9-]{4,30}$/i', $ga_id)) $ga_id = '';
 // Titlu: nu repetăm numele site-ului dacă e deja în titlu
 $_page_title = str_contains($seo_title, $siteName) ? $seo_title : $seo_title . ' | ' . $siteName;
 
-// Temă: preferința utilizatorului → tema implicită a site-ului → light
-$_theme_pref = $u['theme_preference'] ?? setting('site_theme_default', 'light');
-if (!in_array($_theme_pref, ['light', 'dark', 'auto'], true)) $_theme_pref = 'light';
-$_theme_attr = $_theme_pref === 'dark' ? 'dark' : 'light';
+// Temă: designul 2027 e dark-first. Preferința explicită a utilizatorului (light/dark) are prioritate;
+// „auto" = tema implicită a site-ului (Admin → Aspect), implicit dark.
+$_site_theme = setting('site_theme_default', 'dark') === 'light' ? 'light' : 'dark';
+$_theme_pref = $u['theme_preference'] ?? 'auto';
+if (!in_array($_theme_pref, ['light', 'dark'], true)) $_theme_pref = $_site_theme;
+$_theme_attr = $_theme_pref;
 
-// Culorile brandului din Admin → Aspect (înainte se salvau dar nu se aplicau pe site)
+// Culorile din Admin → Aspect: principală = accent (volt), secundară = brand (violet)
 $_c1 = safe_color(setting('site_color_primary', ''), '');
 $_c2 = safe_color(setting('site_color_secondary', ''), '');
+if (in_array(strtolower($_c1), ['#fd1c1c', '#e8380d', '#ff4a1c'], true)) $_c1 = ''; // culori din designul vechi
+if (in_array(strtolower($_c2), ['#ff9500', '#f59e0b', '#ff8a00'], true)) $_c2 = '';
 
 // URL canonic: fără parametri de tracking (ref, utm_*, fbclid…)
 $_path = strtok($_SERVER['REQUEST_URI'] ?? '/', '?');
@@ -41,8 +45,7 @@ $fav  = safe_url(setting('site_favicon'), true);
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<meta name="theme-color" content="#F6F5F2" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#0C0C10" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="<?= $_theme_attr === 'light' ? '#F1F0EA' : '#07070B' ?>">
 <title><?= h($_page_title) ?></title>
 <?php if(!empty($seo_desc)): ?><meta name="description" content="<?= h(mb_substr($seo_desc, 0, 300)) ?>"><?php endif; ?>
 <meta name="robots" content="<?= h(setting('meta_robots','index,follow')) ?>">
@@ -66,20 +69,18 @@ $fav  = safe_url(setting('site_favicon'), true);
 /* Temă înainte de randare (fără „flash" de culoare) */
 (function(){
   var d=document.documentElement,p=d.getAttribute('data-theme-pref'),s=null;
-  try{s=localStorage.getItem('veedo_theme');}catch(e){}
-  var t=s||p;
-  if(t==='auto'){t=window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';}
-  d.setAttribute('data-theme',t==='dark'?'dark':'light');
+  try{s=localStorage.getItem('veedo_theme27');}catch(e){}
+  d.setAttribute('data-theme',(s||p)==='light'?'light':'dark');
 })();
 </script>
 
 <!-- Fonturi: preconnect + display=swap (înainte: @import în CSS, care bloca randarea) -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Sora:wght@600;700;800&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@500;600&family=Unbounded:wght@500;600;700;800&display=swap">
 <link rel="stylesheet" href="/css/style.css?v=<?= CSS_VER ?>">
 <?php if ($_c1 || $_c2): ?>
-<style>:root{<?= $_c1 ? '--brand:'.$_c1.';--flame:'.$_c1.';' : '' ?><?= $_c2 ? '--brand2:'.$_c2.';' : '' ?>--grad-ember:linear-gradient(135deg,<?= $_c2 ?: '#FF7A2F' ?> 0%,<?= $_c1 ?: '#FF4A1C' ?> 60%);--grad-text:linear-gradient(100deg,<?= $_c1 ?: '#FF4A1C' ?>,<?= $_c2 ?: '#FF8A00' ?>);}</style>
+<style>:root,[data-theme]{<?= $_c1 ? '--accent:'.$_c1.';--accent-2:'.$_c1.';' : '' ?><?= $_c2 ? '--brand:'.$_c2.';' : '' ?>}</style>
 <?php endif; ?>
 <?php if($ga_id): ?>
 <script async src="https://www.googletagmanager.com/gtag/js?id=<?= h($ga_id) ?>"></script>
@@ -174,28 +175,33 @@ if ($custom_css):
       <?php if ($logo): ?>
         <img src="<?= h($logo) ?>" alt="<?= h($siteName) ?>" height="32">
       <?php else: ?>
-        <svg class="logo-mark" viewBox="0 0 120 120" width="30" height="30" aria-hidden="true"><defs><linearGradient id="vdv" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FF8A00"/><stop offset=".55" stop-color="#FF4A1C"/><stop offset="1" stop-color="#E0360B"/></linearGradient></defs><rect x="4" y="4" width="112" height="112" rx="34" fill="url(#vdv)"/><path d="M38 40 L60 82 L82 40" fill="none" stroke="#fff" stroke-width="15" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <svg class="logo-mark" viewBox="0 0 120 120" width="32" height="32" aria-hidden="true"><defs><linearGradient id="vdv" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7357FF"/><stop offset=".55" stop-color="#C14BFF"/><stop offset="1" stop-color="#FF4FA3"/></linearGradient></defs><rect x="2" y="2" width="116" height="116" rx="38" fill="url(#vdv)"/><path d="M36 38 L60 84 L84 38" fill="none" stroke="#D4FF3F" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/></svg>
         <span class="logo-text">veedo</span>
       <?php endif; ?>
     </a>
 
+    <nav class="main-nav" aria-label="Secțiuni">
+      <a href="/cauta" class="nav-chip<?= str_starts_with($_cur, '/cauta') ? ' active' : '' ?>">Anunțuri</a>
+      <?php if (setting_bool('feature_explore')): ?><a href="/explore" class="nav-chip<?= str_starts_with($_cur, '/explore') ? ' active' : '' ?>">Explore</a><?php endif; ?>
+      <?php if (setting_bool('feature_stories')): ?><a href="/stories" class="nav-chip<?= str_starts_with($_cur, '/stories') ? ' active' : '' ?>">Stories</a><?php endif; ?>
+      <?php if (setting_bool('feature_live')): ?><a href="/live" class="nav-chip<?= str_starts_with($_cur, '/live') ? ' active' : '' ?>"><span class="live-dot"></span>LIVE</a><?php endif; ?>
+    </nav>
+
     <div class="header-search">
-      <form action="/cauta" method="GET" role="search">
-        <span class="search-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg></span>
-        <input type="search" name="q" class="search-auto" placeholder="Caută mașini, apartamente, telefoane…" autocomplete="off"
-               aria-label="Caută anunțuri" value="<?= isset($_GET['q']) && is_string($_GET['q']) ? h($_GET['q']) : '' ?>">
-        <div class="search-dropdown" role="listbox"></div>
-        <button type="submit" class="search-submit">Caută</button>
-      </form>
+      <button type="button" class="search-trigger" data-cmdk-open aria-label="Caută anunțuri (Ctrl+K)">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+        <span><?= isset($_GET['q']) && is_string($_GET['q']) && $_GET['q'] !== '' ? h($_GET['q']) : 'Caută orice… mașini, telefoane, chirii' ?></span>
+        <span class="kbd">⌘K</span>
+      </button>
     </div>
 
     <div class="header-actions">
-      <a href="/cauta" class="icon-btn header-mobile-search-btn" aria-label="Caută">
+      <button type="button" class="icon-btn header-mobile-search-btn" data-cmdk-open aria-label="Caută">
         <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
-      </a>
-
-      <?php if (setting_bool('feature_stories')): ?><a href="/stories" class="nav-chip nav-link-desktop">Stories</a><?php endif; ?>
-      <?php if (setting_bool('feature_live')): ?><a href="/live" class="nav-chip nav-link-desktop"><span class="live-dot"></span>LIVE</a><?php endif; ?>
+      </button>
+      <button type="button" class="icon-btn theme-toggle desktop-only-action" aria-label="Schimbă tema">
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9z"/></svg>
+      </button>
 
       <?php if ($u): ?>
         <a href="/feed" class="icon-btn desktop-only-action" title="Feed-ul tău" aria-label="Feed">
@@ -229,9 +235,6 @@ if ($custom_css):
             <?php if (setting_bool('feature_afiliere')): ?><a href="/cont/afiliere" class="dropdown-item"><span class="di-ico">💰</span> Program afiliere</a><?php endif; ?>
             <a href="/cont/abonamente" class="dropdown-item"><span class="di-ico">⭐</span> Planuri & prețuri</a>
             <a href="/cont/setari" class="dropdown-item"><span class="di-ico">⚙️</span> Setări</a>
-            <button type="button" class="dropdown-item theme-toggle-row" style="width:100%;border:0;background:none;cursor:pointer;text-align:left" onclick="VeedoTheme.toggle()">
-              <span class="di-ico">◐</span> <span class="theme-label">Temă întunecată</span>
-            </button>
             <?php if (is_admin()): ?>
             <div class="sep"></div>
             <a href="/admin" class="dropdown-item accent"><span class="di-ico">🛡️</span> Panou admin</a>
@@ -306,6 +309,30 @@ document.addEventListener('keydown', function (e) {
   if (e.key === 'Escape') { var m = document.getElementById('user-menu'); if (m) m.classList.add('hidden'); }
 });
 </script>
+
+<!-- Command palette: căutare instant (⌘K / Ctrl+K) -->
+<div class="cmdk" id="cmdk" role="dialog" aria-modal="true" aria-label="Căutare">
+  <div class="cmdk-box">
+    <form class="cmdk-input" action="/cauta" method="GET" role="search">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+      <input type="search" name="q" id="cmdk-q" placeholder="Ce cauți azi?" autocomplete="off" aria-label="Caută anunțuri">
+      <span class="kbd">ESC</span>
+    </form>
+    <div class="cmdk-body" id="cmdk-body">
+      <div class="cmdk-label">Căutări populare</div>
+      <div class="cmdk-chips">
+        <?php foreach (array_slice(array_filter(array_map('trim', explode(',', setting('hero_chips', 'BMW,apartament,iPhone,bicicletă')))), 0, 8) as $_chip): ?>
+          <a href="/cauta?q=<?= urlencode($_chip) ?>"><?= h($_chip) ?></a>
+        <?php endforeach; ?>
+      </div>
+      <div class="cmdk-label">Scurtături</div>
+      <a class="cmdk-item" href="/anunt/nou"><span class="ci">＋</span><span class="ct">Adaugă un anunț</span></a>
+      <a class="cmdk-item" href="/cauta?video=1"><span class="ci">▶</span><span class="ct">Doar anunțuri video</span></a>
+      <?php if ($u): ?><a class="cmdk-item" href="/mesaje"><span class="ci">💬</span><span class="ct">Mesajele mele</span></a><?php endif; ?>
+    </div>
+    <div class="cmdk-foot"><span><span class="kbd">↵</span> caută</span><span><span class="kbd">↑↓</span> navighează</span><span><span class="kbd">esc</span> închide</span></div>
+  </div>
+</div>
 
 <main id="main-content">
 <?php flash_render(); ?>

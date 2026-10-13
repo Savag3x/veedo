@@ -1,5 +1,5 @@
 // sw.js — Veedo Service Worker (Web Push + PWA caching)
-const CACHE_VERSION = 'v3';
+const CACHE_VERSION = 'v4';
 const CACHE_NAME    = 'veedo-static-' + CACHE_VERSION;
 
 // Asset-uri pre-cached la instalare (esențiale pentru PWA + offline soft-fallback)

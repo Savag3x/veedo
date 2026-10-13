@@ -8,7 +8,7 @@ const VeedoTheme = {
   current() { return document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light'; },
   apply(theme) {
     document.documentElement.setAttribute('data-theme', theme);
-    try { localStorage.setItem('veedo_theme', theme); } catch (e) {}
+    try { localStorage.setItem('veedo_theme27', theme); } catch (e) {}
     document.querySelectorAll('.theme-label').forEach(el => {
       el.textContent = theme === 'dark' ? 'Temă luminoasă' : 'Temă întunecată';
     });
@@ -309,9 +309,87 @@ function initSearchAuto() {
   });
 }
 
+// ---- Command palette (⌘K / Ctrl+K) cu rezultate instant ----
+const Cmdk = {
+  el: null, input: null, body: null, base: '', timer: null, sel: -1,
+  init() {
+    this.el = document.getElementById('cmdk');
+    if (!this.el) return;
+    this.input = document.getElementById('cmdk-q');
+    this.body = document.getElementById('cmdk-body');
+    this.base = this.body.innerHTML;
+    document.querySelectorAll('[data-cmdk-open]').forEach(b => b.addEventListener('click', () => this.open()));
+    this.el.addEventListener('click', e => { if (e.target === this.el) this.close(); });
+    document.addEventListener('keydown', e => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); this.isOpen() ? this.close() : this.open(); }
+      else if (e.key === '/' && !this.isOpen() && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) { e.preventDefault(); this.open(); }
+      else if (this.isOpen()) {
+        if (e.key === 'Escape') this.close();
+        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); this.move(e.key === 'ArrowDown' ? 1 : -1); }
+        if (e.key === 'Enter' && this.sel >= 0) { const it = this.items()[this.sel]; if (it) { e.preventDefault(); location.href = it.href; } }
+      }
+    });
+    this.input.addEventListener('input', () => {
+      clearTimeout(this.timer);
+      const q = this.input.value.trim();
+      if (q.length < 2) { this.body.innerHTML = this.base; this.sel = -1; return; }
+      this.timer = setTimeout(() => this.search(q), 180);
+    });
+  },
+  isOpen() { return this.el.classList.contains('open'); },
+  open() { this.el.classList.add('open'); document.body.style.overflow = 'hidden'; this.input.focus(); },
+  close() { this.el.classList.remove('open'); document.body.style.overflow = ''; },
+  items() { return [...this.body.querySelectorAll('.cmdk-item')]; },
+  move(d) {
+    const its = this.items(); if (!its.length) return;
+    this.sel = (this.sel + d + its.length) % its.length;
+    its.forEach((x, i) => x.classList.toggle('sel', i === this.sel));
+    its[this.sel].scrollIntoView({ block: 'nearest' });
+  },
+  async search(q) {
+    try {
+      const r = await fetch('/api/search.php?q=' + encodeURIComponent(q)).then(x => x.json());
+      const res = r.results || [];
+      this.sel = -1;
+      this.body.innerHTML = (res.length
+        ? '<div class="cmdk-label">Anunțuri</div>' + res.map(it =>
+            `<a class="cmdk-item" href="/anunt/${encodeURIComponent(it.slug)}"><span class="ci">▶</span><span class="ct">${escHtml(it.title)}</span><b>${escHtml(it.price)}</b></a>`).join('')
+        : '<div class="cmdk-label">Niciun rezultat rapid</div>')
+        + `<a class="cmdk-item" href="/cauta?q=${encodeURIComponent(q)}"><span class="ci">⌕</span><span class="ct">Toate rezultatele pentru „${escHtml(q)}”</span></a>`;
+    } catch (e) {}
+  }
+};
+
+// ---- Preview video la hover pe carduri (desktop) ----
+function initVideoPreviews() {
+  if (!window.matchMedia('(hover: hover) and (pointer: fine)').matches) return;
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  document.querySelectorAll('.vh-card[data-video]').forEach(card => {
+    let v = null, t = null;
+    card.addEventListener('mouseenter', () => {
+      t = setTimeout(() => {
+        if (!v) {
+          v = document.createElement('video');
+          v.src = card.dataset.video; v.muted = true; v.loop = true; v.playsInline = true; v.preload = 'auto';
+          card.querySelector('.vh-scene').appendChild(v);
+          v.addEventListener('playing', () => card.classList.add('playing'));
+        }
+        v.currentTime = 0; v.play().catch(() => {});
+      }, 220);
+    });
+    card.addEventListener('mouseleave', () => {
+      clearTimeout(t);
+      card.classList.remove('playing');
+      if (v) v.pause();
+    });
+  });
+}
+
 // ---- Init all ----
 document.addEventListener('DOMContentLoaded', () => {
   VeedoTheme.init();
+  Cmdk.init();
+  initVideoPreviews();
   initLikes();
   initFavorites();
   initCatPills();

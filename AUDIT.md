@@ -21,8 +21,9 @@ din admin răspund fără erori PHP sau JavaScript.
    Dacă serverul SMTP are certificat self-signed, setează `smtp_insecure = 1` (nerecomandat).
 5. **Cron**: `cron/send-alerts.php` rulează acum **doar din linia de comandă** (era accesibil public din browser):
    `0 8 * * * php /home/UTILIZATOR/public_html/cron/send-alerts.php`
-6. Verifică fișierul `.env` (model: `.env.example`) — `BASE_URL=https://veedo.ro`.
-7. După deploy, deschide site-ul și verifică: login, postare anunț, mesaje, plată de test.
+6. Migrarea setează și tema implicită pe **dark** și culorile noii palete (secțiunea 5 din fișierul SQL).
+7. Verifică fișierul `.env` (model: `.env.example`) — `BASE_URL=https://veedo.ro`.
+8. După deploy, deschide site-ul și verifică: login, postare anunț, mesaje, plată de test.
 
 > **Atenție — anunțurile „dispărute” de pe homepage:** toate cele 22 de anunțuri din baza de date au
 > `expires_at` în iunie 2026, iar homepage-ul afișează doar anunțurile neexpirate, deci prima pagină apare goală
@@ -104,18 +105,20 @@ Măsurat local: paginile se generează în 5–15 ms, cu 4–20 interogări SQL.
 
 ---
 
-## 5. Design nou („Veedo 2026”)
+## 5. Design nou — „Veedo 2027 / Aurora”
 
-- `css/style.css` rescris complet, păstrând aceleași clase → toate paginile preiau automat noul stil.
-- Tipografie **Sora** (titluri) + **Plus Jakarta Sans** (text), cu diacritice românești complete.
-- Paletă caldă neutră cu accent coral; umbre și raze consistente; focus vizibil pentru tastatură; `prefers-reduced-motion`.
-- **Temă întunecată** reală (light / dark / auto), comutator în meniul contului și în footer, salvată în cont.
-- Header translucid cu căutare centrală și sugestii, meniu de cont nou, badge-uri pentru mesaje/notificări.
-- Homepage: hero nou (căutare + categorie, colaj video, statistici), rail de categorii, carduri „framed” pe desktop și
-  imersive pe mobil, cu badge de video și durată.
-- Navigare mobilă plutitoare cu buton central „+”, footer închis la culoare cu CTA de postare.
-
----
+- **Dark-first**, cu lumină „aurora” (violet / roz / volt) animată în spatele întregului site, granulație fină și
+  panouri de sticlă (glassmorphism). Tema luminoasă rămâne disponibilă (buton lună din header / footer, salvată în cont).
+- **Paletă nouă**: verde „volt” `#D4FF3F` pentru acțiuni și prețuri, violet electric pentru brand, roz neon pentru like-uri.
+  În Admin → Aspect: culoarea principală = accentul volt, secundara = violetul (migrarea le setează automat).
+- **Tipografie**: Unbounded (titluri late), Geist (text), Geist Mono (prețuri, cifre, etichete).
+- **Header „insulă”** plutitoare cu meniu (Anunțuri · Explore · Stories · LIVE) și **command palette**:
+  `Ctrl/⌘+K` sau `/` deschide căutarea instant cu rezultate live, navigabilă din tastatură.
+- **Homepage bento**: tile principal cu titlu mare și căutare, tile cu **video care rulează automat** (cel mai vizionat
+  anunț video), contor de anunțuri video, CTA „Filmează. Postează. Vinde.”, LIVE shopping, avantaje.
+- **Carduri verticale 9:16 tip Reels**: imagine full-bleed, preț în etichetă volt, iar pe desktop **videoul anunțului
+  pornește la hover** (fără sunet). Categoriile sunt tile-uri mari pe un rail orizontal.
+- Footer cu CTA în gradient și wordmark „veedo” uriaș; dock plutitor pe mobil cu buton central „+”.
 
 ## 6. Recomandări rămase (nu au fost implementate)
 
