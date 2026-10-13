@@ -30,7 +30,8 @@ if ($_env_file) {
     }
 }
 function _env(string $key, string $default = ''): string {
-    return $_ENV[$key] ?? getenv($key) ?: $default;
+    $v = $_ENV[$key] ?? getenv($key);
+    return ($v === false || $v === null || $v === '') ? $default : trim((string)$v, " \t\"'");
 }
 
 define('VEEDO_VERSION', '1.0.0');
@@ -75,8 +76,10 @@ if (APP_ENV === 'development') {
     error_reporting(E_ALL);
     ini_set('display_errors', 1);
 } else {
-    error_reporting(0);
+    // Erorile NU se afișează vizitatorilor, dar se scriu în log (înainte error_reporting(0) le ascundea complet)
+    error_reporting(E_ALL & ~E_DEPRECATED & ~E_STRICT);
     ini_set('display_errors', 0);
+    ini_set('log_errors', 1);
 }
 
 // ---- Asset versioning ----
