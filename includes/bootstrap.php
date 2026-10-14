@@ -5,6 +5,7 @@ require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/functions.php';
 require_once __DIR__ . '/security.php';
+require_once __DIR__ . '/customize.php';
 
 send_security_headers();
 session_start_safe();

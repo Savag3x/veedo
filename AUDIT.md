@@ -21,7 +21,8 @@ din admin răspund fără erori PHP sau JavaScript.
    Dacă serverul SMTP are certificat self-signed, setează `smtp_insecure = 1` (nerecomandat).
 5. **Cron**: `cron/send-alerts.php` rulează acum **doar din linia de comandă** (era accesibil public din browser):
    `0 8 * * * php /home/UTILIZATOR/public_html/cron/send-alerts.php`
-6. Migrarea setează și tema implicită pe **dark** și culorile noii palete (secțiunea 5 din fișierul SQL).
+6. Migrarea setează tema implicită **luminoasă** și culorile noii palete (secțiunea 5 din fișierul SQL). Dacă ai rulat
+   deja o versiune mai veche a migrării (cu tema întunecată), rulează și `database/migrations/2026-10-14_tema_luminoasa.sql`.
 7. Verifică fișierul `.env` (model: `.env.example`) — `BASE_URL=https://veedo.ro`.
 8. După deploy, deschide site-ul și verifică: login, postare anunț, mesaje, plată de test.
 
@@ -105,20 +106,22 @@ Măsurat local: paginile se generează în 5–15 ms, cu 4–20 interogări SQL.
 
 ---
 
-## 5. Design nou — „Veedo 2027 / Aurora”
+## 5. Design nou — luminos și profesional
 
-- **Dark-first**, cu lumină „aurora” (violet / roz / volt) animată în spatele întregului site, granulație fină și
-  panouri de sticlă (glassmorphism). Tema luminoasă rămâne disponibilă (buton lună din header / footer, salvată în cont).
-- **Paletă nouă**: verde „volt” `#D4FF3F` pentru acțiuni și prețuri, violet electric pentru brand, roz neon pentru like-uri.
-  În Admin → Aspect: culoarea principală = accentul volt, secundara = violetul (migrarea le setează automat).
-- **Tipografie**: Unbounded (titluri late), Geist (text), Geist Mono (prețuri, cifre, etichete).
+- **Temă luminoasă implicită**: fundal gri foarte deschis, suprafețe albe, text bleumarin (paletă „slate”), umbre fine,
+  fără efecte de lumină sau granulație. Tema întunecată „Aurora” rămâne disponibilă ca opțiune (buton lună din header,
+  salvată în cont) sau poate fi făcută implicită din **Admin → 🎨 Personalizare → Temă**.
+- **Paletă**: albastru `#2563EB` pentru acțiuni și prețuri, bleumarin `#1E40AF` pentru linkuri și stări active.
+  Ambele se schimbă din Personalizare (cu previzualizare live), iar logo-ul preia automat culoarea de accent.
+- **Tipografie**: Inter Tight (titluri) + Inter (text) + IBM Plex Mono (prețuri, cifre). Alte 4 seturi de fonturi
+  se pot alege din Personalizare.
 - **Header „insulă”** plutitoare cu meniu (Anunțuri · Explore · Stories · LIVE) și **command palette**:
   `Ctrl/⌘+K` sau `/` deschide căutarea instant cu rezultate live, navigabilă din tastatură.
 - **Homepage bento**: tile principal cu titlu mare și căutare, tile cu **video care rulează automat** (cel mai vizionat
   anunț video), contor de anunțuri video, CTA „Filmează. Postează. Vinde.”, LIVE shopping, avantaje.
-- **Carduri verticale 9:16 tip Reels**: imagine full-bleed, preț în etichetă volt, iar pe desktop **videoul anunțului
+- **Carduri verticale 9:16 tip Reels**: imagine full-bleed, preț în etichetă colorată, iar pe desktop **videoul anunțului
   pornește la hover** (fără sunet). Categoriile sunt tile-uri mari pe un rail orizontal.
-- Footer cu CTA în gradient și wordmark „veedo” uriaș; dock plutitor pe mobil cu buton central „+”.
+- Footer cu CTA colorat și wordmark „veedo” uriaș; dock plutitor pe mobil cu buton central „+”.
 
 ## 6. Date demo
 

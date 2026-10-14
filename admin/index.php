@@ -537,7 +537,8 @@ if ($section === 'pages') {
     $data['edit_page'] = $edit_page_id ? DB::fetch("SELECT * FROM pages WHERE id=?", [$edit_page_id]) : null;
 }
 if ($section === 'settings') {
-    $data['settings'] = DB::fetchAll("SELECT * FROM settings ORDER BY setting_group, id");
+    // Opțiunile de aspect (ui_*) și vechiul grup „hero” se gestionează din Admin → Personalizare
+    $data['settings'] = DB::fetchAll("SELECT * FROM settings WHERE setting_key NOT LIKE 'ui\\_%' AND COALESCE(setting_group,'') <> 'hero' ORDER BY setting_group, id");
     $data['groups'] = array_unique(array_column($data['settings'], 'setting_group'));
 }
 if ($section === 'orders') {
@@ -803,6 +804,7 @@ include __DIR__ . '/../includes/header.php';
     <a href="/admin?s=categories" class="admin-nav-item <?= $section==='categories'?'active':'' ?>">🏷️ Categorii</a>
     <a href="/admin?s=pages" class="admin-nav-item <?= $section==='pages'?'active':'' ?>">📄 Pagini</a>
     <div class="admin-nav-section">Configurare</div>
+    <a href="/admin/personalizare.php" class="admin-nav-item">🎨 Personalizare</a>
     <a href="/admin?s=settings" class="admin-nav-item <?= $section==='settings'?'active':'' ?>">⚙️ Setări</a>
     <a href="/admin/curatare-uploads.php" class="admin-nav-item">🧹 Curățare uploads</a>
     <a href="/admin/demo-data.php" class="admin-nav-item">🧪 Date demo</a>
@@ -1527,6 +1529,10 @@ include __DIR__ . '/../includes/header.php';
 
 <?php elseif ($section === 'settings'): ?>
     <div class="admin-page-title">Setări generale</div>
+    <div class="alert alert-info" style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+      <span>Aspectul site-ului (culori, fonturi, homepage, carduri, meniu, footer) se modifică acum din <b>Personalizare</b>, cu previzualizare live.</span>
+      <a href="/admin/personalizare.php" class="btn btn-primary btn-sm">🎨 Deschide Personalizare</a>
+    </div>
     <div class="tabs" id="settings-tabs">
       <?php foreach ($data['groups'] as $i=>$g): ?>
         <button type="button" class="tab <?= $i===0?'active':'' ?>" data-group="<?= h($g) ?>" onclick="showGroup('<?= h($g) ?>',this)"><?= ucfirst(h($g)) ?></button>

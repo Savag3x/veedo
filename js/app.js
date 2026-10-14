@@ -6,9 +6,9 @@
 // Preferința se salvează local + în contul utilizatorului (api/theme.php).
 const VeedoTheme = {
   current() { return document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light'; },
-  apply(theme) {
+  apply(theme, persist = true) {
     document.documentElement.setAttribute('data-theme', theme);
-    try { localStorage.setItem('veedo_theme27', theme); } catch (e) {}
+    if (persist) { try { localStorage.setItem('veedo_theme_v3', theme); } catch (e) {} }
     document.querySelectorAll('.theme-label').forEach(el => {
       el.textContent = theme === 'dark' ? 'Temă luminoasă' : 'Temă întunecată';
     });
@@ -19,7 +19,7 @@ const VeedoTheme = {
     fetch('/api/theme.php', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({theme: next}) }).catch(() => {});
   },
   init() {
-    this.apply(this.current());
+    this.apply(this.current(), false); // nu fixăm tema implicită — admin o poate schimba ulterior
     document.querySelectorAll('.theme-toggle').forEach(btn => btn.addEventListener('click', () => this.toggle()));
   }
 };
@@ -318,7 +318,19 @@ const Cmdk = {
     this.input = document.getElementById('cmdk-q');
     this.body = document.getElementById('cmdk-body');
     this.base = this.body.innerHTML;
-    document.querySelectorAll('[data-cmdk-open]').forEach(b => b.addEventListener('click', () => this.open()));
+    document.querySelectorAll('[data-cmdk-open]').forEach(b => b.addEventListener('click', e => { e.preventDefault(); this.open(); }));
+    // Câmpul din meniu: la primul caracter tastat deschidem căutarea instant cu textul deja scris.
+    // (Click-ul simplu lasă utilizatorul să scrie direct în câmp; Enter trimite formularul.)
+    document.querySelectorAll('[data-cmdk-input]').forEach(inp => {
+      inp.addEventListener('input', () => {
+        const v = inp.value;
+        if (v.trim().length < 2) return;
+        this.open();
+        this.input.value = v;
+        this.input.dispatchEvent(new Event('input'));
+        inp.value = '';
+      });
+    });
     this.el.addEventListener('click', e => { if (e.target === this.el) this.close(); });
     document.addEventListener('keydown', e => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); this.isOpen() ? this.close() : this.open(); }
@@ -337,7 +349,11 @@ const Cmdk = {
     });
   },
   isOpen() { return this.el.classList.contains('open'); },
-  open() { this.el.classList.add('open'); document.body.style.overflow = 'hidden'; this.input.focus(); },
+  open() {
+    this.el.classList.add('open'); document.body.style.overflow = 'hidden';
+    this.input.focus();
+    const len = this.input.value.length; try { this.input.setSelectionRange(len, len); } catch (e) {}
+  },
   close() { this.el.classList.remove('open'); document.body.style.overflow = ''; },
   items() { return [...this.body.querySelectorAll('.cmdk-item')]; },
   move(d) {
@@ -363,6 +379,7 @@ const Cmdk = {
 // ---- Preview video la hover pe carduri (desktop) ----
 function initVideoPreviews() {
   if (!window.matchMedia('(hover: hover) and (pointer: fine)').matches) return;
+  if (document.body.hasAttribute('data-no-video-preview')) return;
   if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
   document.querySelectorAll('.vh-card[data-video]').forEach(card => {
     let v = null, t = null;

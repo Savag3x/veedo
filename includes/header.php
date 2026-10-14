@@ -11,16 +11,16 @@ if ($ga_id && !preg_match('/^[A-Z0-9-]{4,30}$/i', $ga_id)) $ga_id = '';
 // Titlu: nu repetăm numele site-ului dacă e deja în titlu
 $_page_title = str_contains($seo_title, $siteName) ? $seo_title : $seo_title . ' | ' . $siteName;
 
-// Temă: designul 2027 e dark-first. Preferința explicită a utilizatorului (light/dark) are prioritate;
-// „auto" = tema implicită a site-ului (Admin → Aspect), implicit dark.
-$_site_theme = setting('site_theme_default', 'dark') === 'light' ? 'light' : 'dark';
+// Temă: implicit luminoasă (profesională). Preferința explicită a utilizatorului (light/dark) are prioritate;
+// „auto" = tema implicită a site-ului (Admin → Personalizare).
+$_site_theme = ui('site_theme_default') === 'dark' ? 'dark' : 'light';
 $_theme_pref = $u['theme_preference'] ?? 'auto';
 if (!in_array($_theme_pref, ['light', 'dark'], true)) $_theme_pref = $_site_theme;
 $_theme_attr = $_theme_pref;
 
-// Culorile din Admin → Aspect: principală = accent (volt), secundară = brand (violet)
-$_c1 = safe_color(setting('site_color_primary', ''), '');
-$_c2 = safe_color(setting('site_color_secondary', ''), '');
+// Culorile din Admin → Personalizare: principală = accent (butoane, prețuri), secundară = brand (linkuri)
+$_c1 = safe_color(ui('site_color_primary'), '');
+$_c2 = safe_color(ui('site_color_secondary'), '');
 if (in_array(strtolower($_c1), ['#fd1c1c', '#e8380d', '#ff4a1c'], true)) $_c1 = ''; // culori din designul vechi
 if (in_array(strtolower($_c2), ['#ff9500', '#f59e0b', '#ff8a00'], true)) $_c2 = '';
 
@@ -45,7 +45,7 @@ $fav  = safe_url(setting('site_favicon'), true);
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<meta name="theme-color" content="<?= $_theme_attr === 'light' ? '#F1F0EA' : '#07070B' ?>">
+<meta name="theme-color" content="<?= $_theme_attr === 'light' ? '#F6F7F9' : '#07070B' ?>">
 <title><?= h($_page_title) ?></title>
 <?php if(!empty($seo_desc)): ?><meta name="description" content="<?= h(mb_substr($seo_desc, 0, 300)) ?>"><?php endif; ?>
 <meta name="robots" content="<?= h(setting('meta_robots','index,follow')) ?>">
@@ -69,18 +69,25 @@ $fav  = safe_url(setting('site_favicon'), true);
 /* Temă înainte de randare (fără „flash" de culoare) */
 (function(){
   var d=document.documentElement,p=d.getAttribute('data-theme-pref'),s=null;
-  try{s=localStorage.getItem('veedo_theme27');}catch(e){}
-  d.setAttribute('data-theme',(s||p)==='light'?'light':'dark');
+  try{s=localStorage.getItem('veedo_theme_v3');}catch(e){}
+  d.setAttribute('data-theme',(s||p)==='dark'?'dark':'light');
 })();
 </script>
 
 <!-- Fonturi: preconnect + display=swap (înainte: @import în CSS, care bloca randarea) -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@500;600&family=Unbounded:wght@500;600;700;800&display=swap">
+<?php $_fonts = ui_fonts(); $_font = $_fonts[ui('ui_font')] ?? $_fonts['futurist']; ?>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?<?= h($_font[1]) ?>&display=swap">
 <link rel="stylesheet" href="/css/style.css?v=<?= CSS_VER ?>">
 <?php if ($_c1 || $_c2): ?>
-<style>:root,[data-theme]{<?= $_c1 ? '--accent:'.$_c1.';--accent-2:'.$_c1.';' : '' ?><?= $_c2 ? '--brand:'.$_c2.';' : '' ?>}</style>
+<?php
+// Text pe accent: negru pe culori deschise, alb pe culori închise (contrast automat)
+$_on = '';
+if ($_c1) { [$_r, $_g, $_b] = sscanf(strlen($_c1) === 4 ? '#' . $_c1[1].$_c1[1].$_c1[2].$_c1[2].$_c1[3].$_c1[3] : $_c1, '#%02x%02x%02x');
+  $_on = (0.299 * $_r + 0.587 * $_g + 0.114 * $_b) > 150 ? '#0A0A0C' : '#FFFFFF'; }
+?>
+<style>:root,[data-theme]{--font-display:<?= $_font[2] ?>,ui-sans-serif,system-ui,sans-serif;--font-main:<?= $_font[3] ?>,ui-sans-serif,system-ui,sans-serif;--font-mono:<?= $_font[4] ?>,ui-monospace,monospace;<?= $_c1 ? '--accent:'.$_c1.';--accent-2:'.$_c1.';--on-accent:'.$_on.';' : '' ?><?= $_c2 ? '--brand:'.$_c2.';' : '' ?>}</style>
 <?php endif; ?>
 <?php if($ga_id): ?>
 <script async src="https://www.googletagmanager.com/gtag/js?id=<?= h($ga_id) ?>"></script>
@@ -165,8 +172,18 @@ if ($custom_css):
 <noscript><style>.vh-reveal{opacity:1!important;transform:none!important}</style></noscript>
 <?php if (isset($extra_head)) echo $extra_head; ?>
 </head>
-<body>
+<body class="<?= ui_body_classes() ?>"<?= ui_bool('ui_video_preview') ? '' : ' data-no-video-preview' ?>>
 <a href="#main-content" class="skip-link">Sari la conținut</a>
+
+<?php if (ui_bool('ui_bar_on') && ui('ui_bar_text') !== ''):
+  $_bar_id = substr(md5(ui('ui_bar_text') . ui('ui_bar_link')), 0, 10); ?>
+<div class="announce-bar announce-<?= h(ui('ui_bar_style')) ?>" id="announce-bar" data-id="<?= $_bar_id ?>">
+  <span><?= h(ui('ui_bar_text')) ?></span>
+  <?php if (ui('ui_bar_link') !== ''): ?><a href="<?= h(ui('ui_bar_link')) ?>"><?= h(ui('ui_bar_link_text') ?: 'Detalii →') ?></a><?php endif; ?>
+  <?php if (ui_bool('ui_bar_dismiss')): ?><button type="button" aria-label="Închide" onclick="try{localStorage.setItem('veedo_bar','<?= $_bar_id ?>')}catch(e){};this.parentNode.remove()">×</button><?php endif; ?>
+</div>
+<?php if (ui_bool('ui_bar_dismiss')): ?><script>try{if(localStorage.getItem('veedo_bar')==='<?= $_bar_id ?>')document.getElementById('announce-bar').remove();}catch(e){}</script><?php endif; ?>
+<?php endif; ?>
 
 <header class="site-header">
   <div class="header-inner">
@@ -175,33 +192,38 @@ if ($custom_css):
       <?php if ($logo): ?>
         <img src="<?= h($logo) ?>" alt="<?= h($siteName) ?>" height="32">
       <?php else: ?>
-        <svg class="logo-mark" viewBox="0 0 120 120" width="32" height="32" aria-hidden="true"><defs><linearGradient id="vdv" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7357FF"/><stop offset=".55" stop-color="#C14BFF"/><stop offset="1" stop-color="#FF4FA3"/></linearGradient></defs><rect x="2" y="2" width="116" height="116" rx="38" fill="url(#vdv)"/><path d="M36 38 L60 84 L84 38" fill="none" stroke="#D4FF3F" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <svg class="logo-mark" viewBox="0 0 120 120" width="32" height="32" aria-hidden="true"><rect x="2" y="2" width="116" height="116" rx="34" style="fill:var(--accent)"/><path d="M36 40 L60 84 L84 40" fill="none" style="stroke:var(--on-accent)" stroke-width="15" stroke-linecap="round" stroke-linejoin="round"/></svg>
         <span class="logo-text">veedo</span>
       <?php endif; ?>
     </a>
 
     <nav class="main-nav" aria-label="Secțiuni">
-      <a href="/cauta" class="nav-chip<?= str_starts_with($_cur, '/cauta') ? ' active' : '' ?>">Anunțuri</a>
+      <?php if (ui_bool('ui_nav_ads')): ?><a href="/cauta" class="nav-chip<?= str_starts_with($_cur, '/cauta') ? ' active' : '' ?>">Anunțuri</a><?php endif; ?>
       <?php if (setting_bool('feature_explore')): ?><a href="/explore" class="nav-chip<?= str_starts_with($_cur, '/explore') ? ' active' : '' ?>">Explore</a><?php endif; ?>
       <?php if (setting_bool('feature_stories')): ?><a href="/stories" class="nav-chip<?= str_starts_with($_cur, '/stories') ? ' active' : '' ?>">Stories</a><?php endif; ?>
       <?php if (setting_bool('feature_live')): ?><a href="/live" class="nav-chip<?= str_starts_with($_cur, '/live') ? ' active' : '' ?>"><span class="live-dot"></span>LIVE</a><?php endif; ?>
+      <?php foreach (ui_nav_links() as [$_nl, $_nu]): ?><a href="<?= h($_nu) ?>" class="nav-chip<?= $_nu !== '/' && str_starts_with($_cur, $_nu) ? ' active' : '' ?>"><?= h($_nl) ?></a><?php endforeach; ?>
     </nav>
 
     <div class="header-search">
-      <button type="button" class="search-trigger" data-cmdk-open aria-label="Caută anunțuri (Ctrl+K)">
+      <form class="search-trigger" action="/cauta" method="GET" role="search">
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
-        <span><?= isset($_GET['q']) && is_string($_GET['q']) && $_GET['q'] !== '' ? h($_GET['q']) : 'Caută orice… mașini, telefoane, chirii' ?></span>
+        <input type="search" name="q" class="search-trigger-input" data-cmdk-input
+               placeholder="Caută orice… mașini, telefoane, chirii" autocomplete="off" aria-label="Caută anunțuri"
+               value="<?= isset($_GET['q']) && is_string($_GET['q']) ? h($_GET['q']) : '' ?>">
         <span class="kbd">⌘K</span>
-      </button>
+      </form>
     </div>
 
     <div class="header-actions">
-      <button type="button" class="icon-btn header-mobile-search-btn" data-cmdk-open aria-label="Caută">
+      <a href="/cauta" class="icon-btn header-mobile-search-btn" data-cmdk-open aria-label="Caută">
         <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
-      </button>
+      </a>
+      <?php if (ui_bool('ui_theme_toggle')): ?>
       <button type="button" class="icon-btn theme-toggle desktop-only-action" aria-label="Schimbă tema">
         <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9z"/></svg>
       </button>
+      <?php endif; ?>
 
       <?php if ($u): ?>
         <a href="/feed" class="icon-btn desktop-only-action" title="Feed-ul tău" aria-label="Feed">
@@ -249,7 +271,8 @@ if ($custom_css):
 
       <a href="/anunt/nou" class="btn btn-primary btn-pill <?= $u ? 'desktop-only-action' : '' ?>" style="margin-left:4px">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-        <span class="post-btn-text">Adaugă <span class="post-btn-text-long">anunț</span></span>
+        <?php $_pl = ui('ui_post_label') ?: 'Adaugă anunț'; $_pw = explode(' ', $_pl, 2); ?>
+        <span class="post-btn-text"><?= h($_pw[0]) ?><?php if (isset($_pw[1])): ?> <span class="post-btn-text-long"><?= h($_pw[1]) ?></span><?php endif; ?></span>
       </a>
     </div>
   </div>

@@ -9,13 +9,13 @@ $yr = date('Y');
 </main><!-- /main -->
 
 <footer class="site-footer" role="contentinfo">
-  <?php if (!is_logged() || !str_starts_with(strtok($_SERVER['REQUEST_URI'] ?? '/', '?'), '/anunt/nou')): ?>
+  <?php if (ui_bool('ui_footer_cta') && !str_starts_with(strtok($_SERVER['REQUEST_URI'] ?? '/', '?'), '/anunt/nou')): ?>
   <div class="footer-cta">
     <div>
-      <h3>Filmează. Postează. Vinde.<br>Totul în mai puțin de un minut.</h3>
-      <p>Anunțurile cu video primesc mai multe vizualizări și mesaje. Postarea e gratuită.</p>
+      <h3><?= h(ui('ui_footer_cta_title')) ?></h3>
+      <?php if (ui('ui_footer_cta_text') !== ''): ?><p><?= h(ui('ui_footer_cta_text')) ?></p><?php endif; ?>
     </div>
-    <a href="/anunt/nou" class="btn btn-primary btn-lg btn-pill">Adaugă anunț gratuit →</a>
+    <a href="/anunt/nou" class="btn btn-primary btn-lg btn-pill"><?= h(ui('ui_footer_cta_btn') ?: 'Adaugă anunț') ?></a>
   </div>
   <?php endif; ?>
 
@@ -26,7 +26,7 @@ $yr = date('Y');
         <?php if ($logo): ?>
           <img src="<?= h($logo) ?>" alt="<?= h(setting('site_name','Veedo')) ?>" style="height:32px;width:auto;max-width:160px;object-fit:contain;" loading="lazy">
         <?php else: ?>
-          <svg viewBox="0 0 120 120" width="32" height="32" aria-hidden="true"><defs><linearGradient id="vdvf" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7357FF"/><stop offset="1" stop-color="#FF4FA3"/></linearGradient></defs><rect x="2" y="2" width="116" height="116" rx="38" fill="url(#vdvf)"/><path d="M36 38 L60 84 L84 38" fill="none" stroke="#D4FF3F" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <svg viewBox="0 0 120 120" width="32" height="32" aria-hidden="true"><rect x="2" y="2" width="116" height="116" rx="34" style="fill:var(--accent)"/><path d="M36 40 L60 84 L84 40" fill="none" style="stroke:var(--on-accent)" stroke-width="15" stroke-linecap="round" stroke-linejoin="round"/></svg>
           veedo
         <?php endif; ?>
       </div>
@@ -72,15 +72,15 @@ $yr = date('Y');
         <li><a href="/contact">Contact</a></li>
         <?php if(setting_bool("feature_afiliere")): ?><li><a href="/afiliere">Program afiliere</a></li><?php endif; ?>
         <?php if(setting_bool("feature_alerte")): ?><li><a href="/alerte">Alerte căutare</a></li><?php endif; ?>
-        <li><button type="button" class="theme-toggle">◐ <span class="theme-label">Temă luminoasă</span></button></li>
+        <?php if (ui_bool('ui_theme_toggle')): ?><li><button type="button" class="theme-toggle">◐ <span class="theme-label">Temă luminoasă</span></button></li><?php endif; ?>
       </ul>
     </div>
   </div>
 
-  <div class="footer-wordmark" aria-hidden="true">veedo</div>
+  <?php if (ui_bool('ui_footer_wordmark')): ?><div class="footer-wordmark" aria-hidden="true"><?= h(mb_strtolower(preg_replace('/\.[a-z]{2,}$/i', '', ui('site_name')) ?: 'veedo')) ?></div><?php endif; ?>
 
   <div class="footer-bottom">
-    <span><?= h(setting('footer_text', "© $yr Veedo.ro - Toate drepturile rezervate")) ?></span>
+    <span><?= h(ui('footer_text')) ?></span>
     <nav aria-label="Legal">
       <a href="/pagina/termeni-si-conditii">Termeni și condiții</a>
       <a href="/pagina/politica-confidentialitate">Confidențialitate</a>
@@ -94,14 +94,16 @@ $yr = date('Y');
 // Scripturile de upload se încarcă doar pe paginile care au formulare de upload
 $_sp = $_SERVER['SCRIPT_NAME'] ?? '';
 $_needs_upload = (bool)preg_match('~/(anunt-nou|anunt-editeaza|stories|mesaje|live-start)\.php$|/cont/setari\.php$~', $_sp);
-$_v = '20261013';
+// Versiunea = data modificării fișierului: după fiecare actualizare browserele iau automat varianta nouă
+// (fișierele au cache de 1 an, deci o versiune fixă făcea browserele să păstreze JS-ul vechi).
+$_v = fn(string $f) => (string)(@filemtime(BASE_PATH . $f) ?: VEEDO_VERSION);
 ?>
 <?php if ($_needs_upload): ?>
-<script src="/js/image-compress.js?v=<?= $_v ?>" defer></script>
-<script src="/js/video-upload-progress.js?v=<?= $_v ?>" defer></script>
+<script src="/js/image-compress.js?v=<?= $_v('/js/image-compress.js') ?>" defer></script>
+<script src="/js/video-upload-progress.js?v=<?= $_v('/js/video-upload-progress.js') ?>" defer></script>
 <?php endif; ?>
-<script src="/js/recently-viewed.js?v=<?= $_v ?>" defer></script>
-<script src="/js/app.js?v=<?= $_v ?>" defer></script>
+<script src="/js/recently-viewed.js?v=<?= $_v('/js/recently-viewed.js') ?>" defer></script>
+<script src="/js/app.js?v=<?= $_v('/js/app.js') ?>" defer></script>
 <?= $extra_js ?? '' ?>
 
 <?php if (is_logged() && defined('VAPID_PUBLIC_KEY') && VAPID_PUBLIC_KEY): ?>

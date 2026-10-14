@@ -23,7 +23,9 @@ if ($active_cat) {
         }
     }
 }
-$sort       = in_array($_GET['sort']??'', ['views','price_asc','price_desc']) ? $_GET['sort'] : 'recent';
+$_sorts_ok  = ['recent','views','price_asc','price_desc'];
+$sort       = in_array($_GET['sort'] ?? '', $_sorts_ok, true) ? $_GET['sort']
+            : (in_array(ui('ui_default_sort'), $_sorts_ok, true) ? ui('ui_default_sort') : 'recent');
 
 $where  = "a.status='active' AND (a.expires_at IS NULL OR a.expires_at >= CURDATE())";
 $params = [];
@@ -46,12 +48,12 @@ $pagination = paginate(
      LEFT JOIN ad_photos ap ON ap.ad_id = a.id AND ap.is_primary = 1
      WHERE $where ORDER BY $order",
     "SELECT COUNT(*) as total FROM ads a WHERE $where",
-    $params, 24
+    $params, max(6, min(60, (int)ui('ui_per_page') ?: 24))
 );
 
 // Stories active (afișate doar pe mobil)
 $stories = [];
-if (setting_bool('feature_stories')) {
+if (setting_bool('feature_stories') && ui_bool('ui_show_stories')) {
     $stories = DB::fetchAll(
         "SELECT s.user_id, u.name AS user_name, u.avatar AS user_avatar, MAX(s.created_at) AS latest
          FROM stories s JOIN users u ON u.id = s.user_id
@@ -91,11 +93,12 @@ $hero_stats = cache_remember('home_stats', 300, function () {
 $hero_video = null;
 $live_now   = 0;
 if (!$active_cat && $pagination['page'] === 1) {
-    $hero_video = DB::fetch("
-        SELECT a.title, a.slug, a.price, a.currency, a.video_path, a.video_thumb, a.city, c.name AS cat_name
+    $_hv_sql = "SELECT a.title, a.slug, a.price, a.currency, a.video_path, a.video_thumb, a.city, c.name AS cat_name
         FROM ads a JOIN categories c ON c.id=a.category_id
-        WHERE a.status='active' AND a.video_path IS NOT NULL
-        ORDER BY a.is_boosted DESC, a.views_count DESC LIMIT 1");
+        WHERE a.status='active' AND a.video_path IS NOT NULL";
+    // Anunțul ales din Admin → Personalizare; altfel cel mai vizionat anunț video
+    if ((int)ui('ui_hero_ad_id') > 0) $hero_video = DB::fetch($_hv_sql . " AND a.id=?", [(int)ui('ui_hero_ad_id')]);
+    if (!$hero_video) $hero_video = DB::fetch($_hv_sql . " ORDER BY a.is_boosted DESC, a.views_count DESC LIMIT 1");
     try { $live_now = (int)(DB::fetch("SELECT COUNT(*) c FROM live_streams WHERE status='live'")['c'] ?? 0); } catch (Exception $e) {}
 }
 
@@ -178,6 +181,24 @@ include __DIR__ . '/includes/header.php';
 .bt-trust li{display:flex;gap:9px;align-items:center}
 .bt-trust li b{width:22px;height:22px;border-radius:7px;background:var(--brand-light);color:var(--brand);display:grid;place-items:center;font-size:12px;flex-shrink:0}
 
+/* Tema luminoasă: variantă sobră, profesională */
+[data-theme="light"] .bt{backdrop-filter:none;-webkit-backdrop-filter:none;border-color:var(--border);box-shadow:var(--shadow)}
+[data-theme="light"] .bt-main{background:linear-gradient(135deg,#FFFFFF 0%,#F4F7FF 100%);justify-content:center}
+[data-theme="light"] .bt-main::after{background:radial-gradient(circle,rgba(37,99,235,.16),transparent 65%);filter:blur(30px);opacity:1;animation:none}
+[data-theme="light"] .bt-title{font-size:clamp(2.4rem,4.4vw,4.2rem);font-weight:700;line-height:1.04;letter-spacing:-.035em}
+[data-theme="light"] .bt-eyebrow{font-family:var(--font-main);font-size:12.5px;letter-spacing:.08em;color:var(--accent)}
+[data-theme="light"] .bt-eyebrow i{box-shadow:0 0 0 4px var(--brand-light)}
+[data-theme="light"] .bt-search{border-radius:14px;border-color:var(--border);box-shadow:var(--shadow)}
+[data-theme="light"] .bt-search select{background:var(--surface-2);border-radius:10px}
+[data-theme="light"] .bt-search button{border-radius:10px}
+[data-theme="light"] .bt-search button:hover{transform:none;background:var(--accent-2)}
+[data-theme="light"] .bt-chips a{background:var(--surface);border-color:var(--border)}
+[data-theme="light"] .bt-chips a:hover{border-color:var(--accent);color:var(--accent)}
+[data-theme="light"] .bt-video{background:#0F172A}
+[data-theme="light"] .bt-video .ph{background:linear-gradient(160deg,#1E3A8A 0%,#0F172A 100%)}
+[data-theme="light"] .bt-cta:hover{transform:translateY(-3px)}
+[data-theme="light"] .bt-stat .k,[data-theme="light"] .bt-cta small{font-family:var(--font-main);letter-spacing:.08em}
+
 /* Mobil: hero compact */
 .hero-m{display:none}
 @media(max-width:1100px){
@@ -191,22 +212,28 @@ include __DIR__ . '/includes/header.php';
   .hero-m h1{font-size:2rem;line-height:1;letter-spacing:-.05em;margin-bottom:14px}
   .hero-m .k{display:flex;align-items:center;gap:8px;font-family:var(--font-mono);font-size:11px;letter-spacing:1.3px;text-transform:uppercase;color:var(--text-3);margin-bottom:12px}
   .hero-m .k i{width:7px;height:7px;border-radius:50%;background:var(--accent)}
-  .hero-m button.s{width:100%;display:flex;align-items:center;gap:10px;height:52px;padding:0 8px 0 16px;border-radius:18px;background:var(--surface);border:1px solid var(--glass-border);backdrop-filter:blur(16px);color:var(--text-3);font-size:15px;text-align:left}
-  .hero-m button.s span{flex:1}
-  .hero-m button.s em{font-style:normal;height:38px;width:38px;border-radius:13px;background:var(--accent);color:var(--on-accent);display:grid;place-items:center}
+  .hero-m form.s{width:100%;display:flex;align-items:center;gap:10px;height:54px;padding:0 7px 0 16px;border-radius:18px;background:var(--surface);border:1px solid var(--glass-border);backdrop-filter:blur(16px);color:var(--text-3)}
+  .hero-m form.s:focus-within{border-color:var(--brand);box-shadow:var(--brand-glow)}
+  .hero-m form.s input{flex:1;min-width:0;border:0;outline:0;background:none;height:100%;font-size:15.5px;color:var(--text)}
+  .hero-m form.s input::placeholder{color:var(--text-3)}
+  .hero-m form.s button{flex:0 0 40px;height:40px;border:0;border-radius:13px;background:var(--accent);color:var(--on-accent);display:grid;place-items:center}
 }
 </style>
 
 <!-- HERO BENTO -->
-<?php if (!$active_cat && $pagination['page'] === 1):
+<?php if (!$active_cat && $pagination['page'] === 1 && ui_bool('ui_hero_on')):
+  $_tiles = array_filter(['ui_tile_stats', 'ui_tile_cta', 'ui_tile_live', 'ui_tile_trust'], 'ui_bool');
+  $_span  = $_tiles ? intdiv(12, count($_tiles)) : 12;
+  $_tile_style = ' style="grid-column:span ' . $_span . '"';
+  $_main_full = !ui_bool('ui_tile_video');
   $hv_thumb = $hero_video && $hero_video['video_thumb'] ? thumb_url($hero_video['video_thumb']) : '';
 ?>
 <section class="bento" aria-label="Veedo">
-  <div class="bt bt-main vh-reveal">
+  <div class="bt bt-main vh-reveal"<?= $_main_full ? ' style="grid-column:span 12;grid-row:auto;min-height:440px"' : '' ?>>
     <div>
-      <span class="bt-eyebrow"><i></i><?= h($hero_eyebrow ?: 'Marketplace video') ?> · <?= hero_num($hero_stats['ads']) ?> anunțuri live</span>
-      <h1 class="bt-title">Vezi <span class="hl">înainte</span><br>să cumperi.</h1>
-      <?php if ($hero_subtitle): ?><p class="bt-sub"><?= h($hero_subtitle) ?></p><?php endif; ?>
+      <span class="bt-eyebrow"><i></i><?= h(ui('hero_eyebrow_text') ?: 'Marketplace video') ?> · <?= hero_num($hero_stats['ads']) ?> anunțuri live</span>
+      <h1 class="bt-title"><?= ui_highlight(ui('ui_hero_title')) ?></h1>
+      <?php if (ui('hero_subtitle') !== ''): ?><p class="bt-sub"><?= h(ui('hero_subtitle')) ?></p><?php endif; ?>
     </div>
     <div>
       <form action="/cauta" method="GET" class="bt-search" role="search">
@@ -226,6 +253,7 @@ include __DIR__ . '/includes/header.php';
     </div>
   </div>
 
+  <?php if (ui_bool('ui_tile_video')): ?>
   <div class="bt bt-video vh-reveal">
     <?php if ($hero_video): ?>
       <video src="<?= h(BASE_URL . '/uploads/videos/' . rawurlencode(basename($hero_video['video_path']))) ?>" <?= $hv_thumb ? 'poster="' . h($hv_thumb) . '"' : '' ?> autoplay muted loop playsinline preload="metadata"></video>
@@ -243,38 +271,49 @@ include __DIR__ . '/includes/header.php';
     </div>
     <a class="cover" href="<?= $hero_video ? '/anunt/' . h($hero_video['slug']) : '/anunt/nou' ?>" aria-label="Deschide anunțul"></a>
   </div>
+  <?php endif; ?>
 
-  <div class="bt bt-stat vh-reveal">
+  <?php if (ui_bool('ui_tile_stats')): ?>
+  <div class="bt bt-stat vh-reveal"<?= $_tile_style ?>>
     <span class="k">Anunțuri video</span>
     <div class="spark" aria-hidden="true"><span style="height:30%"></span><span style="height:55%"></span><span style="height:40%"></span><span style="height:75%"></span><span style="height:60%"></span><span style="height:100%"></span></div>
     <div><div class="n"><?= hero_num($hero_stats['video']) ?></div><div class="s">din <?= hero_num($hero_stats['ads']) ?> anunțuri active · <?= (int)$hero_stats['cities'] ?> orașe</div></div>
   </div>
 
-  <a href="/anunt/nou" class="bt bt-cta vh-reveal">
-    <small>Gratuit · 60 secunde</small>
-    <h3>Filmează.<br>Postează.<br>Vinde.</h3>
+  <?php endif; ?>
+
+  <?php if (ui_bool('ui_tile_cta')): ?>
+  <a href="/anunt/nou" class="bt bt-cta vh-reveal"<?= $_tile_style ?>>
+    <small><?= h(ui('ui_cta_kicker')) ?></small>
+    <h3><?= implode('<br>', array_map('h', ui_lines('ui_cta_title'))) ?></h3>
     <span class="arrow"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
   </a>
 
-  <a href="<?= setting_bool('feature_live') ? '/live' : '/explore' ?>" class="bt bt-live vh-reveal">
-    <span class="bt-pill" style="align-self:flex-start;background:var(--glass);color:var(--text);border-color:var(--glass-border)"><i></i><?= $live_now > 0 ? $live_now . ' live acum' : 'Live shopping' ?></span>
-    <div><h3>Cumpără în direct de la vânzători</h3><p>Întreabă, vezi produsul, negociază — în timp real.</p></div>
-  </a>
+  <?php endif; ?>
 
-  <div class="bt bt-trust vh-reveal">
+  <?php if (ui_bool('ui_tile_live')): ?>
+  <a href="<?= setting_bool('feature_live') ? '/live' : '/explore' ?>" class="bt bt-live vh-reveal"<?= $_tile_style ?>>
+    <span class="bt-pill" style="align-self:flex-start;background:var(--glass);color:var(--text);border-color:var(--glass-border)"><i></i><?= $live_now > 0 ? $live_now . ' live acum' : 'Live shopping' ?></span>
+    <div><h3><?= h(ui('ui_live_title')) ?></h3><p><?= h(ui('ui_live_text')) ?></p></div>
+  </a>
+  <?php endif; ?>
+
+  <?php if (ui_bool('ui_tile_trust')): ?>
+  <div class="bt bt-trust vh-reveal"<?= $_tile_style ?>>
     <span class="k" style="font-family:var(--font-mono);font-size:11px;letter-spacing:1.4px;text-transform:uppercase;color:var(--text-3)">De ce Veedo</span>
     <ul>
-      <li><b>▶</b> Vezi produsul real, nu doar poze</li>
-      <li><b>✓</b> Vânzători business verificați</li>
-      <li><b>⚡</b> Chat instant, fără intermediari</li>
+      <?php foreach (array_slice(ui_lines('ui_trust_items'), 0, 4) as $_ti => $_tl): ?>
+      <li><b><?= ['▶', '✓', '⚡', '★'][$_ti] ?></b> <?= h($_tl) ?></li>
+      <?php endforeach; ?>
     </ul>
   </div>
+  <?php endif; ?>
 </section>
 
 <div class="hero-m">
   <div class="k"><i></i><?= hero_num($hero_stats['ads']) ?> anunțuri live</div>
-  <h1>Vezi <span class="hl">înainte</span> să cumperi.</h1>
-  <button type="button" class="s" data-cmdk-open><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg><span><?= h($hero_search_ph) ?></span><em><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></em></button>
+  <h1><?= ui_highlight(ui('ui_hero_title')) ?></h1>
+  <form class="s" action="/cauta" method="GET" role="search"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg><input type="search" name="q" placeholder="<?= h($hero_search_ph) ?>" autocomplete="off" aria-label="Ce cauți?"><button type="submit" aria-label="Caută"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button></form>
 </div>
 <?php endif; ?>
 
@@ -300,6 +339,7 @@ include __DIR__ . '/includes/header.php';
 
 <!-- Categorii — buton (mobil) deschide panou · pills inline (desktop) -->
 <?php $cur_cat_label = $active_cat ? ($cat_map_name[$active_cat] ?? 'Categorie') : 'Toate'; ?>
+<?php if (ui_bool('ui_show_categories')): ?>
 <div class="vh-cat-block">
   <button type="button" class="vh-cat-trigger vh-reveal" id="vh-cat-trigger" aria-haspopup="true" aria-expanded="false">
     <span class="vh-ct-ico">📂</span>
@@ -335,6 +375,8 @@ include __DIR__ . '/includes/header.php';
   </nav>
 </div>
 
+<?php endif; /* categorii */ ?>
+
 <!-- Anunțuri văzute recent (populat din localStorage) -->
 <style>
 .rv-section{max-width:1180px;margin:18px auto 0;padding:0 16px}
@@ -349,18 +391,18 @@ include __DIR__ . '/includes/header.php';
 .rv-title{font-size:12.5px;font-weight:600;color:var(--text);margin-top:7px;line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .rv-price{font-family:var(--font-display);font-size:13px;font-weight:800;color:var(--brand);margin-top:3px}
 </style>
-<section class="rv-section" id="recent-viewed" style="display:none">
+<section class="rv-section" id="<?= ui_bool('ui_show_recent') ? 'recent-viewed' : 'recent-viewed-off' ?>" style="display:none">
   <h2>Văzute recent</h2>
   <div class="rv-strip" id="rv-strip"></div>
 </section>
 
 <!-- Section label + sort -->
 <div class="vh-sec vh-reveal">
-  <h2><span class="vh-kicker"><?= $active_cat ? 'Categorie' : 'Feed · actualizat live' ?></span>
+  <h2><span class="vh-kicker"><?= $active_cat ? 'Categorie' : h(ui('ui_feed_kicker')) ?></span>
     <?php if ($active_cat): ?>
       <?= h($cat_map_icon[$active_cat] ?? '') ?> <?= h($cat_map_name[$active_cat] ?? 'Anunțuri') ?>
     <?php else: ?>
-      Proaspăt postate
+      <?= h(ui('ui_feed_title')) ?>
     <?php endif; ?>
   </h2>
   <span class="vh-line"></span>
